@@ -125,7 +125,7 @@ Resources have typicaly these properties:
 
 - Application maintains a list of jobs. 
 - Each job has:
-    - jobNumber: Sequential per tenant, assigned via an atomic Firestore counter (FieldValue.increment) managed server-side. See ./autoincrement_counter_in_firestore.md.
+    - JobNumber (Autoincremental, in the Firestore database for the specific user)
     - Title 
     - Description 
     - JobStatus (active, archived)
@@ -143,7 +143,7 @@ Resources have typicaly these properties:
 
   - The Advances collection is specific for each job. 
   - It is a list of payments made by the client to the craftsman. 
-  - The app assigns an ordinalNumber to each advance using an atomic Firestore counter (FieldValue.increment) stored under the job. See ./autoincrement_counter_in_firestore.md.
+  - Application automatically assignes an ordinal number to each advance. The numbering is based on the Firestore autoincremental feature.
   - The app screen will display the sum of the advances and the sum of the costs. The difference represents the amount to be reimbursed to the craftsman for the costs incurred.
 
 ### **I. Cost Management**
