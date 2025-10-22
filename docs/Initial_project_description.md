@@ -16,11 +16,11 @@
 
 2. While driving, the craftsman activates the FinDogAI application and says: "I am driving my Transporter to Brno to handle an order for Mr. Smith."
 
-3. The application AI sumarises and repeats this text to confirm that the voice input was correctly recognized. The application will say: "I understand that you are driving your Volkswagen Transporter to Brno to handle an order for Mr. Smith."
+3. The application AI summarizes and repeats this text to confirm that the voice input was correctly recognized. The application will say: "I understand that you are driving your Volkswagen Transporter to Brno to handle an order for Mr. Smith."
 
 4. The application will ask: "What is the odometer reading?".
 
-5. The craftsman answers, the application AI sumarises and repeats the entered data and save it in the database for the order called "Smith, Brno". If the order does not yet exist, the AI ​​will announce this and help with its creation.
+5. The craftsman answers, the application AI summarizes and repeats the entered data and save it in the database for the order called "Smith, Brno". If the order does not yet exist, the AI ​​will announce this and help with its creation.
 
 The conversation can also take place in such a way that in the morning it is determined that the order "Smith, Brno" will be worked on all day and all input data will then be automatically saved for this order. So craftsman can say: "Set today's active order to Smith, Brno." The application will say: "I understand that you want to set today's active order to Smith, Brno. Is this correct?" The craftsman answers "Yes" and the application saves the active order.
 
@@ -59,7 +59,7 @@ All other records (journeys, materials, human labor, machine labor, overhead, co
 
 #### Voice activation and wake word detection (true hands‑free)
 
-Some technical researches have been done and the results are in the [ExternalDocs folder](./docs/ExternalDocs).
+Some technical researches have been done and the results are in the [ExternalDocs folder](./ExternalDocs).
 So the following part needs to be revised. 
 
 - Objective: enable safe, truly hands‑free operation while driving or on site. The app should listen locally for a dedicated wake phrase (e.g., “Hey FinDog”).
@@ -107,7 +107,7 @@ So the following part needs to be revised.
 5. Subscription price (monthly, yearly)
 
 ### E. Application state
-  - Acive job
+  - Active job
 
 
 ### **F. Resources Management**
@@ -116,7 +116,7 @@ So the following part needs to be revised.
 2. **Vehicles** (optional)
 3. **Machines** (optional)
 
-Resources have typicaly these properties:
+Resources have typically these properties:
 * Name
 * Hourly rate (machines, team members)
 * Kilometer rate (vehicles)
@@ -126,15 +126,15 @@ Resources have typicaly these properties:
 - Application maintains a list of jobs. 
 - Each job has:
     - jobNumber: Sequential per tenant, assigned via an atomic Firestore counter (FieldValue.increment) managed server-side. See ./autoincrement_counter_in_firestore.md.
-    - Title 
-    - Description 
-    - JobStatus (active, archived)
-    - CreatedAt 
-    - UpdatedAt 
-    - UpdatedBy (user name)
-    - VatRate in percent
-    - Currency = "EUR"; // ISO 4217 code (validated in application layer)
-    - Budget = 0; // Bid budget entered manually by user
+    - title
+    - description
+    - status (active, completed, archived)
+    - createdAt
+    - updatedAt
+    - updatedBy (user name)
+    - vatRate (percent)
+    - currency: defaults from Business profile; can be overridden per job (ISO 4217 code; validated in application layer)
+    - budget = 0; // Bid budget entered manually by user
     - List of Costs (Transport, Material, Labor, Machine, Other)
     - List of Advances provided by the client
     - List of updating events (Starting work; Starting journey; Finishing work; Finishing journey; Material added; etc.)
@@ -151,7 +151,7 @@ Resources have typicaly these properties:
 #### There are two methods how to manage costs:
 
 ##### A. Classic CRUD operations (e.g. Creating, Updating, Deleting costs). 
- Application will manage a list of costs for each job on teh separate tab/screen. This is the "classic" way how to manage costs. However it should be also possible to add/update/delete costs by voice. A list of costs can be filtered by the cost type (transport, material, labor, machine, other) and updated on the specific page.
+ Application will manage a list of costs for each job on the separate tab/screen. This is the "classic" way to manage costs. However, it should also be possible to add/update/delete costs by voice. A list of costs can be filtered by the cost type (transport, material, labor, machine, other) and updated on the specific page.
 
 ##### B. Event-based (e.g. Starting work, Stopping work, Adding material, etc.)
 
@@ -166,9 +166,9 @@ Resources have typicaly these properties:
 * **Smart receipt scanning:** The user could say: `"Write down this receipt."`, take a picture of it and the AI ​​would use OCR (Optical Character Recognition) technology to "read" the individual items, prices and dates and suggest their inclusion in the order.
 
 3. **Transport**
-* **Recording:** By voice at the beginning and end of the trip. The user says: `"I'm going to Brno to handle an order for Mr. Smith. Odometer reading is 12345."` and `"I'm back from Brno. Odometer reading is 124567."`. The application understands the intent and asks for confirmation.
+* **Recording:** By voice at the beginning and end of the trip. The user says: `"I'm going to Brno to handle an order for Mr. Smith. Odometer reading is 12345."` and `"I'm back from Brno. Odometer reading is 12456."`. The application understands the intent and asks for confirmation.
 * **Automation:** The application can use GPS to automatically track the distance traveled. The user would just say: `"I'm going to Mr. Smith's"` and the application would measure the route itself and upon arrival ask: `"Have you arrived at the location? Should I write down the 15 km drive to the Smith order?"`.
-* **Vehicles:** The user saves their vehicles in the database(e.g. "Transporter", "Fabia") and sets the rate per kilometer for each. The application ​​then automatically calculates the cost of the trip.
+* **Vehicles:** The user saves their vehicles in the database (e.g. "Transporter", "Fabia") and sets the rate per kilometer for each. The application ​​then automatically calculates the cost of the trip.
 
 4. **Machines** (optional)
 * **Recording:** Simple voice commands for start/stop (`"Starting work with excavator"`, `"Stopping excavator"`, `"Excavator ends for today"`).
@@ -187,10 +187,10 @@ To implement such an application, a combination of several technologies will be 
 * **Payment processing:** The application will use a payment processing service like Stripe to process payments.
 * **Mobile applications:** An Angular 20+ PWA (Progressive Web App) can be used to create a mobile application.
 * **Database:** **Firebase/Firestore** for storing data about users, jobs, team members, machines, cost items, etc. Firestore is specifically designed for modern, offline-first, cross-platform apps (PWA and Capacitor/native) and handles data synchronization and offline persistence gracefully.
-* **AI and Voice Services (the most important):** An optional feature which probably needs online connection to work. Maybe an locally running LLM can be used for offline operation in the near future. A provider (OpenAI, Groq, OpenRouter, Ollama, etc.) of the LLM should be configurable by the application developer.
-* **Speech-to-Text:** Device or browser native capabilities where available; Services like **Google Cloud Speech-to-Text** or **Whisper by OpenAI**, which have excellent support for Czech, German, Polish and other languages. (It is possible to use multiple services for different languages.) Some researches have been done and the results are in the [ExternalDocs folder](./docs/ExternalDocs).
+* **AI and Voice Services (the most important):** An optional feature which probably needs online connection to work. Maybe a locally running LLM can be used for offline operation in the near future. A provider (OpenAI, Groq, OpenRouter, Ollama, etc.) of the LLM should be configurable by the application developer.
+* **Speech-to-Text:** Device or browser native capabilities where available; Services like **Google Cloud Speech-to-Text** or **Whisper by OpenAI**, which have excellent support for Czech, German, Polish and other languages. (It is possible to use multiple services for different languages.) Some researches have been done and the results are in the [ExternalDocs folder](./ExternalDocs).
 * **Natural Language Processing (NLU):** This should be part of the LLM. If needed, services like **Google Dialogflow** or **Rasa** for recognizing intentions and entities from text. 
-* **Text-to-Speech:** Services like **Google Cloud Text-to-Speech** for generating natural-sounding Czech (and other languages) voice responses from the assistant. See also [ExternalDocs folder](./docs/ExternalDocs).
+* **Text-to-Speech:** Services like **Google Cloud Text-to-Speech** for generating natural-sounding Czech (and other languages) voice responses from the assistant. See also [ExternalDocs folder](./ExternalDocs).
 * **Image recognition (OCR):** **Google Cloud Vision AI** for the receipt scanning feature.
 
 ---
@@ -206,20 +206,20 @@ We would need a collection of application users and at least the following basic
 * **Vehicles:** List of the user's vehicles with their names and rate per km/mile, last known odometer reading.
 * **Team:** List of the user's team members with their names and hourly rates.
 * **Machines:** List of the user's machines with their names and hourly rates.
-* **Jobs:** Job name, client name, address, status (active, completed, invoiced), notes, images, etc.
+* **Jobs:** Job name, client name, address, status (active, completed, archived), notes, images, etc.
 
 The Job document has the following structure:
-  - Title: "Cleaning Smith, Brno"
-  - Address: "Brno"
+  - title: "Cleaning Smith, Brno"
+  - address: "Brno"
   - status: "active"
-  - Description: "Cleaning and painting of the Smith's house."
+  - description: "Cleaning and painting of the Smith's house."
   - images: ["image1.jpg", "image2.jpg"]
   - vatRate: 21
   - currency: "EUR"
   - budget: 10000
-  - Advances: Subcollection of advances provided by the client for the job.
-  - Events: Subcollection of all events for the job.
-  - Costs: Subcollection of all cost items for the job:
+  - advances: Subcollection of advances provided by the client for the job.
+  - events: Subcollection of all events for the job.
+  - costs: Subcollection of all cost items for the job:
 
 Cost item:
   - Type (transport, material, labor, machine)
@@ -254,10 +254,10 @@ users/ (collection)
 │       │       ├── events (subcollection)
 │       │       └── advances (subcollection)
 │       ├── job_ID_002 (Document)
-│       │       ├── Title: "John Dow, Prague"
-│       │       ├── Address: "Prague"
+│       │       ├── title: "John Doe, Prague"
+│       │       ├── address: "Prague"
 │       │       ├── status: "active"
-│       │       ├── Description: "Gardening and landscaping."
+│       │       ├── description: "Gardening and landscaping."
 │       │       ├── images: ["image1.jpg", "image2.jpg"]
 │       │       ├── vatRate: 21
 │       │       ├── currency: "EUR"
@@ -317,7 +317,7 @@ users/ (collection)
 * **Job detail:** Sum of costs for the job. After clicking on it, the user would see a clear summary of all costs - divided into labor, materials and transportation. 
 * **Recent activities:** A list of recent activities (events, costs) with a short summary.
 * **Export:** A key function at the end. The ability to export the complete list of costs for the job as a simple PDF file or email it to the client.
-* **Jobs list:** A simple list of running and completed jobs.
+* **Jobs list:** A simple list of active and completed/archived jobs.
 * **Settings:** A simple settings screen for the user to manage their profile, business settings, subscription plan, etc.
 * **Resources management:** A simple screen to manage (CRUD operations) the user's resources (team members, vehicles, machines) with their names and hourly rates.
 
@@ -326,10 +326,10 @@ users/ (collection)
 - Example 1:
 1. Large main button indicating application readiness. When clicked, the application is activated. A user can start talking.
 2. The application listens to the user's voice input.
-3. A user can say: "I'm going to Brno to handle an order for Mr. Smith. Odometer reading is 123456.". The applcation understands the intent and asks for confirmation.
+3. A user can say: "I'm going to Brno to handle an order for Mr. Smith. Odometer reading is 123456.". The application understands the intent and asks for confirmation.
 4. The application asks: "Is the odometer reading correct?"
 5. The user answers "Yes" or "No".
-6. If the user answers "Yes", the application sumarises and repeats the entered data and asks for confirmation. If the user answers "Yes", the application confirms the data and saves the data. If the user answers "No", the application asks for the correct odometer reading.
+6. If the user answers "Yes", the application summarizes and repeats the entered data and asks for confirmation. If the user answers "Yes", the application confirms the data and saves the data. If the user answers "No", the application asks for the correct odometer reading.
 7. A user can also cancel the operation at any time by saying "Cancel" or "Stop" or "Back" or "Start again" or similar.
 8. If the job does not exist, the application asks: "Should I create a new job for Mr. Smith in Brno?"
 9. The user answers "Yes" or "No".
@@ -340,7 +340,7 @@ users/ (collection)
 2. A user says: "Set active job to Smith, Brno."
 3. The application asks: "Is the job Smith, Brno correct?"
 4. The user answers "Yes" or "No".
-5. If the user answers "Yes", the application confirms the data and sets the active job. All following costs will be automatically assigned to the data.If the user answers "No", the application asks for the correct job name.
+5. If the user answers "Yes", the application confirms the data and sets the active job. All following costs will be automatically assigned to the data. If the user answers "No", the application asks for the correct job name.
 6. When an active job is set, the application can enter costs for the active job. It will read labels of the buttons ("Add material", "Add machine work", "Add comment", "Add picture".) For example, if the user says "Add material", the application will ask for the name of the material and the price.
 7. The user says: "I bought screws in Hornbach for five hundred crowns." The application understands the intent, repeats the summary of the entered data and asks for confirmation.
 8. The user answers "Yes" or "Save" or "No" or "Cancel" or "Don't save" or a similar answer.
