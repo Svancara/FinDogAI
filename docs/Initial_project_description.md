@@ -10,6 +10,83 @@
 
 - The idea can be summarized as **voice-controlled mobile AI assistant for recording job costs**. The goal is maximum simplicity and minimizing manual data entry.
 
+## MVP Objectives and Success Criteria
+
+### Objectives
+- Enable a solo craftsman to capture day-to-day job costs and advances with minimal typing through voice-first flows.
+- Ensure the app is usable fully offline, with seamless sync when connectivity returns.
+- Provide a clear per‑job summary of costs vs. advances with export to a simple PDF/email.
+
+### Success Criteria (measurable)
+- Voice flow “Start journey + odometer” works end‑to‑end on mobile in Czech and English; confirmation TTS is audible; event is persisted (online and offline).
+- Voice flow “Set active job” works end‑to‑end; subsequent costs/events are auto‑assigned to the active job.
+- Offline‑first: With airplane mode on, user can complete both flows; on reconnect, data appears on another device within 10s (typical) without user intervention.
+- Jobs screen shows status (active, completed, archived) and per‑job totals; Export produces a readable PDF.
+- Error rate for STT/intent leading to wrong entity assignments is <5% in basic scenarios (short prompts, low noise), measured in dogfooding.
+
+## Scope and MVP vs. Later Phases
+
+### In scope (MVP)
+- Voice input for two key flows: Set active job; Start/Stop journey with odometer.
+- Manual entry/edit screens for costs (transport, material, labor, machine, other) and advances.
+- Jobs management with fields defined in this document; status: active, completed, archived.
+- Business profile defaults (currency, vatRate) with per‑job overrides.
+- Authentication, multi‑tenant isolation, and data stored in Firestore; basic PDF export.
+
+### Later phases (not MVP)
+- Invoicing and payments integration beyond basic export.
+- Team collaboration with roles/permissions; audit trails.
+- Advanced analytics/dashboards; custom reporting.
+- Broad multilingual voice models tuning; custom wake words management UI.
+- Sharded/distributed counters (not required for expected traffic).
+
+## Non‑Functional Requirements
+- Performance/latency: Post‑wake word to first STT token < 1.5s on mid‑range Android; round‑trip intent confirmation TTS < 3s on typical network.
+- Offline‑first: Enable Firestore local persistence; all MVP flows operate without network; queued writes sync automatically.
+- Privacy: No raw audio is stored by default. STT requests are transient to the chosen provider; redact PII in analytics.
+- Security: Firebase Auth required; rules enforce tenant isolation; only the owner can read/write their tenant’s docs.
+- Reliability: App tolerates process kill; upon reopen, unsent writes remain queued; idempotent Cloud Functions where applicable.
+- Internationalization: Support at least Czech and English UI/locales; currency formatting per job currency.
+- Accessibility: Voice prompts are mirrored with on‑screen text; large buttons for driving mode.
+- Platforms: Hybrid mobile build (Capacitor) prioritized; PWA fallback supported with push‑to‑talk.
+
+## Architecture Overview (high level)
+- Client: Angular 20 + Ionic (Capacitor for native builds). Optional on‑device KWS for wake word; push‑to‑talk always available.
+- Voice pipeline: KWS (optional) → STT provider → NLU/intent → confirmation TTS.
+- Backend: Firebase Auth, Firestore (offline persistence on), Cloud Functions (for validations/exports), Firebase Storage (images).
+- Counters: Use Firestore FieldValue.increment() for sequential jobNumber and resources (Team, Vehicles, Machines) per tenant. Use counters for sequential ordinalNumber per‑job for costs/advances/events. See ./autoincrement_counter_in_firestore.md.
+- Data model: lowerCamelCase field names; status enum is canonical: active | completed | archived.
+
+## Offline Sync and Conflict Resolution Policy
+- Policy: Adhere to Firestore’s default offline sync and conflict resolution strategy. We do not implement custom merge logic.
+- Behavior summary: Client uses local cache and write queue; on reconnect, writes are committed on the server in commit order (last write wins at field level). Transactions are retried client‑side as needed.
+- Usage notes:
+  - Use atomic FieldValue.increment() for counters to avoid race conditions.
+  - Use transactions only when conditional invariants must hold (not expected in MVP flows).
+  - UI indicates sync state (e.g., pending vs. committed) where relevant.
+
+## Acceptance Criteria (MVP Voice Flows)
+
+### Flow A: Start journey with odometer (and confirm)
+- Trigger: Wake word (if enabled) or push‑to‑talk; user says e.g., “I’m going to Brno… Odometer is 12345.”
+- The system:
+  - Captures audio and streams to STT; resolves intent = StartJourney.
+  - If any required slot is missing (vehicle, odometer, destination), asks a clarifying question.
+  - Summarizes back via TTS; user says Yes/No.
+  - On Yes: creates a journey event under the current (active) job or assists to create/select a job if none is active.
+  - Fields persisted: timestamp, vehicle name, destination (free text), odometerStart, createdBy, status. Fields are copies from the vehicle record. Not references to the vehicle record.
+  - Offline: works fully offline; event is visible locally and syncs automatically later.
+- UI: Recent activities shows the new journey; costs summary updates transportation totals after stop is recorded.
+
+### Flow B: Set active job (and auto‑assign subsequent items)
+- Trigger: Wake word or push‑to‑talk; user says e.g., “Set active job to Smith, Brno.”
+- The system:
+  - Resolves intent = SetActiveJob; disambiguates if multiple matches.
+  - Summarizes back via TTS; user confirms.
+  - Sets activeJobId in application state; future events/costs are assigned to this job until changed.
+  - Offline: works fully offline; state persists locally and is re‑established after restart.
+- Acceptance checks: Subsequent “Add material …”, “Start journey …” are stored under the active job without additional job selection.
+
 ## Examples
 
 1. A craftsman leaves for an order in the morning.
@@ -32,7 +109,7 @@ Other details:
 - The application is primarily for mobile use, but it should also be possible to use it on the desktop.
 - The application must be multi-tenant. Each user must have their own data isolated from other users.
 - The application must be secure.
-- The application must support multiple languages. 
+- The application must support multiple languages.
 - The application must support multiple currencies.
 - The application must run gracefully in the offline mode.
 
@@ -60,7 +137,7 @@ All other records (journeys, materials, human labor, machine labor, overhead, co
 #### Voice activation and wake word detection (true hands‑free)
 
 Some technical researches have been done and the results are in the [ExternalDocs folder](./ExternalDocs).
-So the following part needs to be revised. 
+So the following part needs to be revised.
 
 - Objective: enable safe, truly hands‑free operation while driving or on site. The app should listen locally for a dedicated wake phrase (e.g., “Hey FinDog”).
 - Approach:
@@ -123,7 +200,7 @@ Resources have typically these properties:
 
 ### **G. Jobs Management**
 
-- Application maintains a list of jobs. 
+- Application maintains a list of jobs.
 - Each job has:
     - jobNumber: Sequential per tenant, assigned via an atomic Firestore counter (FieldValue.increment) managed server-side. See ./autoincrement_counter_in_firestore.md.
     - title
@@ -141,8 +218,8 @@ Resources have typically these properties:
 
 ### **H. Advances Management**
 
-  - The Advances collection is specific for each job. 
-  - It is a list of payments made by the client to the craftsman. 
+  - The Advances collection is specific for each job.
+  - It is a list of payments made by the client to the craftsman.
   - The app assigns an ordinalNumber to each advance using an atomic Firestore counter (FieldValue.increment) stored under the job. See ./autoincrement_counter_in_firestore.md.
   - The app screen will display the sum of the advances and the sum of the costs. The difference represents the amount to be reimbursed to the craftsman for the costs incurred.
 
@@ -150,7 +227,7 @@ Resources have typically these properties:
 
 #### There are two methods how to manage costs:
 
-##### A. Classic CRUD operations (e.g. Creating, Updating, Deleting costs). 
+##### A. Classic CRUD operations (e.g. Creating, Updating, Deleting costs).
  Application will manage a list of costs for each job on the separate tab/screen. This is the "classic" way to manage costs. However, it should also be possible to add/update/delete costs by voice. A list of costs can be filtered by the cost type (transport, material, labor, machine, other) and updated on the specific page.
 
 ##### B. Event-based (e.g. Starting work, Stopping work, Adding material, etc.)
@@ -189,7 +266,7 @@ To implement such an application, a combination of several technologies will be 
 * **Database:** **Firebase/Firestore** for storing data about users, jobs, team members, machines, cost items, etc. Firestore is specifically designed for modern, offline-first, cross-platform apps (PWA and Capacitor/native) and handles data synchronization and offline persistence gracefully.
 * **AI and Voice Services (the most important):** An optional feature which probably needs online connection to work. Maybe a locally running LLM can be used for offline operation in the near future. A provider (OpenAI, Groq, OpenRouter, Ollama, etc.) of the LLM should be configurable by the application developer.
 * **Speech-to-Text:** Device or browser native capabilities where available; Services like **Google Cloud Speech-to-Text** or **Whisper by OpenAI**, which have excellent support for Czech, German, Polish and other languages. (It is possible to use multiple services for different languages.) Some researches have been done and the results are in the [ExternalDocs folder](./ExternalDocs).
-* **Natural Language Processing (NLU):** This should be part of the LLM. If needed, services like **Google Dialogflow** or **Rasa** for recognizing intentions and entities from text. 
+* **Natural Language Processing (NLU):** This should be part of the LLM. If needed, services like **Google Dialogflow** or **Rasa** for recognizing intentions and entities from text.
 * **Text-to-Speech:** Services like **Google Cloud Text-to-Speech** for generating natural-sounding Czech (and other languages) voice responses from the assistant. See also [ExternalDocs folder](./ExternalDocs).
 * **Image recognition (OCR):** **Google Cloud Vision AI** for the receipt scanning feature.
 
@@ -274,7 +351,7 @@ users/ (collection)
 ## Implementation
 
 - UI is built with Angular 20+ and Ionic https://ionicframework.com/
-- User UI supports multiple languages. 
+- User UI supports multiple languages.
   Specifically:
     - Czech
     - English
@@ -314,7 +391,7 @@ users/ (collection)
 * **Main screen:** Displays the currently active job and its sum of costs and advances entered.
 * **Voice assistant activation:** Either every screen has a button to activate the voice assistant or the button is in the toolbar.
 * **Events inputs:** A set of large buttons for the events inputs (general chat, start/stop work, start/stop journey, add material, add machine work, add comment, add picture).
-* **Job detail:** Sum of costs for the job. After clicking on it, the user would see a clear summary of all costs - divided into labor, materials and transportation. 
+* **Job detail:** Sum of costs for the job. After clicking on it, the user would see a clear summary of all costs - divided into labor, materials and transportation.
 * **Recent activities:** A list of recent activities (events, costs) with a short summary.
 * **Export:** A key function at the end. The ability to export the complete list of costs for the job as a simple PDF file or email it to the client.
 * **Jobs list:** A simple list of active and completed/archived jobs.
@@ -391,5 +468,5 @@ service cloud.firestore {
   - Accessibility testing for WCAG compliance.
   - Voice assistant testing for speech recognition accuracy and user experience.
   - User acceptance testing (UAT) for all critical flows.
-  
+
 
