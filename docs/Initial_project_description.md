@@ -30,21 +30,19 @@ Other details:
 - The application must have the simplest possible UI.
 - The data will be saved in the database, from which an overview of the costs and invoices will later be generated.
 - The application is primarily for mobile use, but it should also be possible to use it on the desktop.
-- The application must be multi-tenant. Each customer must have their own data isolated from other customers.
+- The application must be multi-tenant. Each user must have their own data isolated from other users.
 - The application must be secure.
 - The application must support multiple languages. 
 - The application must support multiple currencies.
 - The application must run gracefully in the offline mode.
 
-
-
 ---
 
 ## Basic concept and key functions
 
-We can call the application "**FinDogAI**" for example. Its main strength will be in the conversational interface that does not burden the craftsman.
+We can call the application "**FinDogAI**". Its main strength will be in the conversational interface that does not burden the craftsman.
 
-### **A. Voice control and conversational AI (The heart of the application ❤️)**
+### **A. Voice control and conversational AI (The heart of the application)**
 
 This is the most important part. The AI ​​must not only convert speech to text, but also understand the context and intent of the user (so-called Natural Language Understanding - NLU).
 
@@ -97,7 +95,7 @@ So the following part needs to be revised.
 3. Business description
 4. Road Distance Unit (km, miles)
 
-### D. Software application data
+### D. Software application profile
 
 1. Subscription type
     - Trial
@@ -108,8 +106,11 @@ So the following part needs to be revised.
 4. Subscription constraints (max jobs, max team members, max vehicles, max machines)
 5. Subscription price (monthly, yearly)
 
+### E. Application state
+  - Acive job
 
-### **E. Resources Management**
+
+### **F. Resources Management**
 
 1. **Team members**. Mandatory. The craftsman himself is a team member.
 2. **Vehicles** (optional)
@@ -120,7 +121,7 @@ Resources have typicaly these properties:
 * Hourly rate (machines, team members)
 * Kilometer rate (vehicles)
 
-### **F. Jobs Management**
+### **G. Jobs Management**
 
 - Application maintains a list of jobs. 
 - Each job has:
@@ -138,46 +139,43 @@ Resources have typicaly these properties:
     - List of Advances provided by the client
     - List of updating events (Starting work; Starting journey; Finishing work; Finishing journey; Material added; etc.)
 
-### **G. Advances Management**
+### **H. Advances Management**
 
   - The Advances collection is specific for each job. 
   - It is a list of payments made by the client to the craftsman. 
   - Application automatically assignes an ordinal number to each advance. The numbering is based on the Firestore autoincremental feature.
-TADY  - The application screen displays the sum of advances and the sum of costs. The difference is the amount the craftsman is owed.
+  - The app screen will display the sum of the advances and the sum of the costs. The difference represents the amount to be reimbursed to the craftsman for the costs incurred.
 
-
-### **G. Cost Management**
+### **I. Cost Management**
 
 #### There are two methods how to manage costs:
 
-##### A. CRUD operations (e.g. Creating, Updating, Deleting costs). 
+##### A. Classic CRUD operations (e.g. Creating, Updating, Deleting costs). 
  Application will manage a list of costs for each job on teh separate tab/screen. This is the "classic" way how to manage costs. However it should be also possible to add/update/delete costs by voice. A list of costs can be filtered by the cost type (transport, material, labor, machine, other) and updated on the specific page.
 
-###### B. Event-based (e.g. Starting work, Stopping work, Adding material, etc.)
+##### B. Event-based (e.g. Starting work, Stopping work, Adding material, etc.)
 
 1. **Labor**
 * **Recording:** Simple voice commands for start/stop (`"Starting work"`, `"Taking a break"`, `"Finishing for today"`) or by time (`"I worked for 2 hours."`).
-* **Rate setting:** User sets his/her hourly rate and the application automatically calculates the price for the work performed.
 * **Team** A user can store their team members and set their hourly rates in the database.
 * **Team work recording:** The user can say: `"John is working on the Smith order."` and the application will ask: `"How many hours is he working?"`
-* **Team members working on the same order:** The application will store worked hours for each team member to the same or different orders. Application automatically calculate the total cost of the work performed by the team members on the order according to their hourly rates.
+* **Team members working on the same order:** The application will store worked hours for each team member to the same order. Application automatically calculates the total cost of the work performed by the team members on the order according to their hourly rates.
 
 2. **Material**
 * **Recording:** By voice (`"I bought 5 plasterboard sheets for 2500 crowns."`).
 * **Smart receipt scanning:** The user could say: `"Write down this receipt."`, take a picture of it and the AI ​​would use OCR (Optical Character Recognition) technology to "read" the individual items, prices and dates and suggest their inclusion in the order.
 
 3. **Transport**
-* **Recording:** By voice at the beginning and end of the trip.
+* **Recording:** By voice at the beginning and end of the trip. The user says: `"I'm going to Brno to handle an order for Mr. Smith. Odometer reading is 12345."` and `"I'm back from Brno. Odometer reading is 124567."`. The application understands the intent and asks for confirmation.
 * **Automation:** The application can use GPS to automatically track the distance traveled. The user would just say: `"I'm going to Mr. Smith's"` and the application would measure the route itself and upon arrival ask: `"Have you arrived at the location? Should I write down the 15 km drive to the Smith order?"`.
-* **Vehicles:** The user saves their vehicles in the database(e.g. "Transporter", "Fabia") and sets the rate per kilometer for each. The AI ​​then automatically calculates the cost of the trip.
+* **Vehicles:** The user saves their vehicles in the database(e.g. "Transporter", "Fabia") and sets the rate per kilometer for each. The application ​​then automatically calculates the cost of the trip.
 
-4. **Machines ⚙ ** (optional)
+4. **Machines** (optional)
 * **Recording:** Simple voice commands for start/stop (`"Starting work with excavator"`, `"Stopping excavator"`, `"Excavator ends for today"`).
 * **Rate setting:** User sets the hourly rate of the machine in the database. The application calculates the total cost of the work performed by the machine.
 
 5. **Other costs** (optional)
 * **Recording:** By voice (`"I paid 500 crowns for parking."`).
-
 
 ---
 
@@ -187,159 +185,141 @@ To implement such an application, a combination of several technologies will be 
 
 * **Subscription model:** The application will be available for free for a trial period. After that, a subscription will be required. The subscription will be billed monthly or yearly. The subscription will include a certain number of jobs, team members, vehicles and machines. If the user wants to add more, they will have to pay extra.
 * **Payment processing:** The application will use a payment processing service like Stripe to process payments.
-
-* **Mobile applications:** An Angular PWA (Progressive Web App) can be used to create a mobile application.
-* **Database:** **Firebase/Firestore** for storing data about users, jobs, team members, machines, cost items, etc.
-* **AI and Voice Services (the most important):**
-* **Speech-to-Text:** Device or browser native capabilities where available; Services like **Google Cloud Speech-to-Text** or **Whisper by OpenAI**, which have excellent support for Czech, German, Polish and other languages. (It is possible to use multiple services for different languages.)
-* **Natural Language Processing (NLU):** Services like **Google Dialogflow** or **Rasa** for recognizing intentions and entities from text.
-* **Text-to-Speech:** Services like **Google Cloud Text-to-Speech** for generating natural-sounding Czech (and other languages) voice responses from the assistant.
+* **Mobile applications:** An Angular 20+ PWA (Progressive Web App) can be used to create a mobile application.
+* **Database:** **Firebase/Firestore** for storing data about users, jobs, team members, machines, cost items, etc. Firestore is specifically designed for modern, offline-first, cross-platform apps (PWA and Capacitor/native) and handles data synchronization and offline persistence gracefully.
+* **AI and Voice Services (the most important):** An optional feature which probably needs online connection to work. Maybe an locally running LLM can be used for offline operation in the near future. A provider (OpenAI, Groq, OpenRouter, Ollama, etc.) of the LLM should be configurable by the application developer.
+* **Speech-to-Text:** Device or browser native capabilities where available; Services like **Google Cloud Speech-to-Text** or **Whisper by OpenAI**, which have excellent support for Czech, German, Polish and other languages. (It is possible to use multiple services for different languages.) Some researches have been done and the results are in the [ExternalDocs folder](./docs/ExternalDocs).
+* **Natural Language Processing (NLU):** This should be part of the LLM. If needed, services like **Google Dialogflow** or **Rasa** for recognizing intentions and entities from text. 
+* **Text-to-Speech:** Services like **Google Cloud Text-to-Speech** for generating natural-sounding Czech (and other languages) voice responses from the assistant. See also [ExternalDocs folder](./docs/ExternalDocs).
 * **Image recognition (OCR):** **Google Cloud Vision AI** for the receipt scanning feature.
 
 ---
 
 ## Data structure
 
-### Firebase Firestore data structure:
+### Firestore data structure:
 
-We would need a collection of customers and at least the following basic tables in the database for each customer:
-* **Vehicles:** List of the user's vehicles with their names and rate per km, last known odometer reading.
+We would need a collection of application users and at least the following basic tables in the database for each user:
+* **Personal profile:** Name, email, language, etc.
+* **Business profile:** Currency, VAT rate, etc.
+* **Subscription plan:** Type (trial, basic, premium), expiration date, etc.
+* **Vehicles:** List of the user's vehicles with their names and rate per km/mile, last known odometer reading.
 * **Team:** List of the user's team members with their names and hourly rates.
 * **Machines:** List of the user's machines with their names and hourly rates.
-* **Jobs:** Job name, client name, address, status (active, completed, invoiced), notes, images.
-* **Costs:** Subcollection of all cost items for the job:
-* Type (transport, material, labor, machine)
-* Date and time
-* Description (e.g. "Journey to Brno", "Plasterboard")
-* Amount/units (e.g. 55 km, 2500 CZK, 8 hours)
-* Price (e.g. 55 km * 0.50 CZK/km = 27.50 CZK)
-* Comment
-* Picture
+* **Jobs:** Job name, client name, address, status (active, completed, invoiced), notes, images, etc.
 
+The Job document has the following structure:
+  - Title: "Cleaning Smith, Brno"
+  - Address: "Brno"
+  - status: "active"
+  - Description: "Cleaning and painting of the Smith's house."
+  - images: ["image1.jpg", "image2.jpg"]
+  - vatRate: 21
+  - currency: "EUR"
+  - budget: 10000
+  - Advances: Subcollection of advances provided by the client for the job.
+  - Events: Subcollection of all events for the job.
+  - Costs: Subcollection of all cost items for the job:
 
-Customer document shape (top-level under customers/{tenantId}):
-```json
-{
-  "type": "customer",
-  "profile": {
-    "name": "Acme Corp",
-    "email": "ops@acme.com",
-    "address": "123 Main St",
-    "phone": "+1 555 1234",
-    "notes": "VIP"
-  },
-  "createdAt": "2024-01-15T10:30:00Z",
-  "updatedAt": "2024-01-15T10:30:00Z"
-}
+Cost item:
+  - Type (transport, material, labor, machine)
+  - Date and time (assigned automatically by the application)
+  - Description (e.g. "Journey to Brno", "Plasterboard")
+  - Amount/units (e.g. 55 km, 2500 CZK, 8 hours)
+  - Price (e.g. 55 km * 0.50 CZK/km = 27.50 CZK)
+  - Picture
+
+Database schema:
 ```
-
-Note: Personal information fields are grouped under the `profile` object (name, email, address, phone, notes). Backend API requests and responses also use this nested `profile` structure for customers.
-
-
-customers/ (collection)
-├──  customer_ID_001 (Document)
-│   └── Vehicles (subcollection)
-│   └── Team (subcollection)
-│   └── Machines (subcollection)
+users/ (collection)
+├──  user_ID_001 (Document)
+│   ├── Personal profile (object)
+│   ├── Business profile (object)
+│   ├── Subscription plan (object)
+│   ├── Vehicles (subcollection)
+│   ├── Team (subcollection)
+│   ├── Machines (subcollection)
+│   ├── Application state (object)
 │   └── Jobs (subcollection)
-│    ├──  job_ID_001 (Document)
-│    │    ├── name: "Smith, Brno"
-│    │    ├── client: "Smith"
-│    │    ├── address: "Brno"
-│    │    ├── status: "active"
-│    │    ├── notes: "Painting and plastering"
-│    │    ├── images: ["image1.jpg", "image2.jpg"]
-│    │    └── costs (subcollection)
-│    ├──  job_ID_002 (Document)
-│    │    ├── name: "John Dow, Prague"
-│    │    ├── client: "Smith"
-│    │    ├── address: "Brno"
-│    │    ├── status: "active"
-│    │    ├── notes: "Painting and plastering"
-│    │    ├── images: ["image1.jpg", "image2.jpg"]
-│    │    └── costs (subcollection)
-│    └── ... next jobs
-├──  customer_ID_002 (Document)
-│   └── ...
-└── ... next customers
+│       ├── job_ID_001 (Document)
+│       │       ├── Title: "Cleaning Smith, Brno"
+│       │       ├── Address: "Brno"
+│       │       ├── status: "active"
+│       │       ├── Description: "Cleaning and painting of the Smith's house."
+│       │       ├── images: ["image1.jpg", "image2.jpg"]
+│       │       ├── vatRate: 21
+│       │       ├── currency: "EUR"
+│       │       ├── budget: 10000
+│       │       ├── costs (subcollection)
+│       │       ├── events (subcollection)
+│       │       └── advances (subcollection)
+│       ├── job_ID_002 (Document)
+│       │       ├── Title: "John Dow, Prague"
+│       │       ├── Address: "Prague"
+│       │       ├── status: "active"
+│       │       ├── Description: "Gardening and landscaping."
+│       │       ├── images: ["image1.jpg", "image2.jpg"]
+│       │       ├── vatRate: 21
+│       │       ├── currency: "EUR"
+│       │       ├── budget: 10000
+│       │       ├── costs (subcollection)
+│       │       ├── events (subcollection)
+│       │       └── advances (subcollection)
+│       └── ... next jobs
+└── ... next users
+```
 
 ---
 
 ## Implementation
 
-This project contains three main parts:
-- Backend
-- User UI
-- Administrator UI
-
-- Both UIs are built with Angular and Ionic https://ionicframework.com/
-- User UI supports multiple languages. Specifically:
+- UI is built with Angular 20+ and Ionic https://ionicframework.com/
+- User UI supports multiple languages. 
+  Specifically:
     - Czech
     - English
-    - German
-    - Polish
-    - Slovak
 
 - Czech is a default UI language.
 - Programming is done in English.
-- The currency is defined by the user (Crowns, Euros, Dollars, etc.).
-
-
-### Backend
-- Backend is built using C# and .NET 8.
-- It follows the latest monitoring and logging standards and best practices.
-- Backend is responsible for:
-    - Authentication and authorization
-    - Data storage and retrieval
-    - Business logic
-    - Communication with external services
-- Backend communicates with external services. Specifically with:
-    - External services like Google Cloud Text-to-Speech or similar
-    - Firestore
-    - AI providers like OpenAI, Groq, OpenRouter, Cohere, etc.
-    - Other services as needed
+- The currency is defined by the craftsman (Crowns, Euros, Dollars, etc.).
 
 ### User UI
 
-- User UI is primarily for mobile.
-- User UI communicates with backend using REST API.
-- User UI is built using Angular and Ionic.
+- User UI is mobile-first.
+- User UI is built using Angular 20+ and Ionic.
 - The User UI must support complete control and navigation through voice commands.
 - In addition User UI must support also text input for users who prefer to use text input.
-- User UI must support also disconnected operations.
 
 #### Offline mode and sync strategy (emphasized)
 
-- Critical actions available offline:
-  - Start/stop work, set active job, add material (name, qty, price), add journey (odometer start/end), add notes, capture photos/voice memos.
-- Local storage & caching:
-  - Use IndexedDB (e.g., localForage/ngx-indexed-db) for an Outbox queue + local replicas of Jobs and recent Costs.
-  - Service Worker (Workbox) caches shell + API responses for read-through when offline. Media (photos) stored in Cache Storage with metadata in IndexedDB.
-- Sync engine:
-  - Deterministic IDs (UUID v4) with tenant and device prefix to prevent collisions and enable idempotent server upserts.
-  - Background sync when connectivity resumes; exponential backoff, per-item retry limits, and clear per-item status (Queued, Syncing, Synced, Error).
-  - Conflict resolution: last-writer-wins by updatedAt for simple fields; per-field merge for additive lists; mark "Needs review" if concurrent changes detected.
-- Voice in offline:
+- The application is offline-first.
+
+- The application uses Google Firebase/Firestore for data storage. Firestore is specifically designed for modern, offline-first, cross-platform apps (PWA and Capacitor/native) and handles data synchronization and offline persistence gracefully.
+
+- The official and highly recommended library for Firestore in Angular is AngularFire (@angular/fire).
+
+- Voice in offline - needs more research:
   - PWA baseline: record audio as voice memo and transcribe when online; provide a small on-device keyword grammar for core intents ("start work", "stop work", "add material").
   - Hybrid build (Capacitor): leverage Android offline recognizer / iOS on-device dictation when available for richer offline STT.
+
 - UX behavior:
-  - Visible "Offline" banner; core buttons remain enabled; show queue length and last sync time; allow manual "Sync now".
-  - Totals in Job detail computed from local + synced items; warn if totals may be incomplete while offline.
-- Security offline:
-  - Minimize PII in local cache; encrypt at rest via WebCrypto; if packaged, store key material in platform secure storage; wipe local cache on logout.
+  - Visible "Offline" banner; core buttons remain enabled; show queue length and last sync time.
+
 - Testing & observability:
   - E2E tests in airplane mode; synthetic conflict scenarios; metrics: median time-to-sync, queue failure rate, storage size guardrails.
 
 
-Given the target group, the UI must be **extremely simple and clear**.
+### Given the target group, the UI must be **extremely simple and clean**.
 
-* **Main screen:** Displays the currently active job and the sum of costs entered.
-* **Voice assistant activation:** The main screen contains a large button to activate the voice assistant.
-* **Costs inputs:** A set of large buttons for the costs inputs (general chat, start/stop work, start/stop journey, add material, add machine work, add comment, add picture).
-* **Job detail:** Sum of costs for the job. After clicking on it, the user would see a clear summary of all costs - divided into labor, materials and transportation. Each item should be easy to manually edit or delete.
-* **Recent activities:** A list of recent activities (costs) with a short summary.
-* **Export:** A key function at the end. The ability to export the complete list of costs for the job as a simple PDF file, which will serve as **a basis for invoicing**.
+* **Main screen:** Displays the currently active job and its sum of costs and advances entered.
+* **Voice assistant activation:** Either every screen has a button to activate the voice assistant or the button is in the toolbar.
+* **Events inputs:** A set of large buttons for the events inputs (general chat, start/stop work, start/stop journey, add material, add machine work, add comment, add picture).
+* **Job detail:** Sum of costs for the job. After clicking on it, the user would see a clear summary of all costs - divided into labor, materials and transportation. 
+* **Recent activities:** A list of recent activities (events, costs) with a short summary.
+* **Export:** A key function at the end. The ability to export the complete list of costs for the job as a simple PDF file or email it to the client.
 * **Jobs list:** A simple list of running and completed jobs.
+* **Settings:** A simple settings screen for the user to manage their profile, business settings, subscription plan, etc.
+* **Resources management:** A simple screen to manage (CRUD operations) the user's resources (team members, vehicles, machines) with their names and hourly rates.
 
 #### Description of basic operations
 
@@ -360,7 +340,7 @@ Given the target group, the UI must be **extremely simple and clear**.
 2. A user says: "Set active job to Smith, Brno."
 3. The application asks: "Is the job Smith, Brno correct?"
 4. The user answers "Yes" or "No".
-5. If the user answers "Yes", the application confirms the data and sets the active job and saves it to the database. All following costs will be automatically assigned to the data.If the user answers "No", the application asks for the correct job name.
+5. If the user answers "Yes", the application confirms the data and sets the active job. All following costs will be automatically assigned to the data.If the user answers "No", the application asks for the correct job name.
 6. When an active job is set, the application can enter costs for the active job. It will read labels of the buttons ("Add material", "Add machine work", "Add comment", "Add picture".) For example, if the user says "Add material", the application will ask for the name of the material and the price.
 7. The user says: "I bought screws in Hornbach for five hundred crowns." The application understands the intent, repeats the summary of the entered data and asks for confirmation.
 8. The user answers "Yes" or "Save" or "No" or "Cancel" or "Don't save" or a similar answer.
@@ -368,61 +348,24 @@ Given the target group, the UI must be **extremely simple and clear**.
 10. Similarly for other costs.
 
 
-#### Other parts of the UI
-
-1. Display the list of jobs.
-2. Implementation of all CRUD operations, which must be controllable by voice and touch.
-This means that the "Save", "Change", "Delete" buttons must respond to touch and voice instructions.
-
-The same for other entities: team members, machines, etc.
-
 ---
-
-### Administrator UI
-- Administrator UI is primarily for desktop.
-- Administrator UI is used for configuration and management of the system.
-- Administrator UI is used for:
-    - Configuration of the system
-    - Management of the system
-    - Monitoring of the system
-    - Reporting
-    - Backup and restore
-    - User management
-    - Role management
-    - Permission management
-    - Audit log
-    - System log
-    - etc.
-- Administrator UI is built using Angular and Ionic.
-- Administrator can perform all operations that are available in the User UI for any customer.
-- It communicates with backend using REST API.
-- UI is built using Angular and Ionic.
-- The Administrator UI is for configuration and management of the system. No voice commands are needed for the Administrator UI.
 
 ## Security and multi-tenant architecture
 
-Robust tenant isolation is a hard requirement. Every request, record, and resource must be scoped to a single tenant (customer) and enforced across client, backend, database, and storage layers.
+Robust tenant isolation is a hard requirement. Every request, record, and resource must be scoped to a single tenant (user) and enforced across client, backend, database, and storage layers.
 
 - Tenancy model
-  - Each customer has a unique tenantId. All entities (Jobs, Costs, Vehicles, Team members, Machines) carry tenantId and are stored under customer-specific paths or with an indexed tenantId field.
-  - Recommended Firestore shape: customers/{tenantId}/(Jobs, Vehicles, TeamMembers, Machines, ...).
-
-- Identity, authN/Z, and token design
-  - Use short-lived access tokens (JWT) issued by the backend/identity provider; include claims: sub, tenant_id, roles, exp, iat.
-  - Roles per tenant: owner, admin, worker. A separate superadmin role exists only in the Admin UI service for cross-tenant support.
-
-- Backend enforcement (never trust the client)
-  - On every request, derive tenantId exclusively from the authenticated token. Ignore any tenantId present in payload.
-  - Apply tenantId filters to all queries and writes. Validate resource ownership pre- and post-DB call.
+  - Each user has a unique tenantId. All entities (Jobs, Costs, Vehicles, Team members, Machines, Advances, Events, ...) carry tenantId and are stored under user-specific paths or with an indexed tenantId field.
+  - Recommended Firestore shape: users/{tenantId}/(Jobs, Vehicles, TeamMembers, Machines, ...).
 
 - Firestore Security Rules (defense-in-depth)
-  - Example rule enforcing tenant scoping in customer subtrees:
+  - Example rule enforcing tenant scoping in user subtrees:
 
 ```
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /customers/{tenantId}/{document=**} {
+    match /users/{tenantId}/{document=**} {
       allow read, write: if request.auth != null
         && request.auth.token.tenant_id == tenantId;
     }
@@ -434,34 +377,19 @@ service cloud.firestore {
   - Partition cloud storage by tenant prefix (e.g., /tenants/{tenantId}/media/...).
   - Generate short-lived, signed URLs on the backend; do not expose bucket keys to clients.
 
-- Encryption and secrets
-  - Encrypt data in transit (TLS) and at rest (provider default). Consider field-level encryption for sensitive fields (client names, addresses) with per-tenant keys managed via KMS.
-  - Manage secrets only in backend (no API keys in the client). Rotate keys regularly.
+- More details to be added...
 
-- Authorization policy (least privilege)
-  - Worker: create/update own job entries and costs within tenant; read-only access to selected entities.
-  - Admin: full CRUD within tenant; manage members and rates.
-  - Owner: billing/export, tenant config, data export/delete requests.
+## Testing
 
-- Auditing and monitoring
-  - Immutable audit log per tenant (who, what, when, from where). Correlate with traceId/requestId. Ship logs to centralized monitoring (SIEM) and alert on anomalies.
-
-- Rate limiting and DoS protection
-  - Per-tenant and per-user rate limits on critical endpoints (login, cost creation, media upload). Web Application Firewall (WAF) in front of the APIs.
-
-- Backups, data lifecycle, and compliance
-  - Regular encrypted backups with per-tenant restore capability. Data retention schedules. GDPR/DSGVO support: export and deletion upon verified request; data residency configuration.
-
-- Example server-side scoping (illustrative)
-
-```
-// C# pseudo-code
-var tenantId = userToken.TenantId;
-return db.Jobs.Where(o => o.TenantId == tenantId);
-```
-
-- Testing strategy
   - Unit tests for auth middlewares and repository filters (tenant must match).
   - Integration tests that attempt cross-tenant access (must be denied) and verify Security Rules.
   - Penetration testing for multi-tenant breakout and IDOR vulnerabilities.
+  - End-to-end tests for happy paths and common error scenarios.
+  - Security testing (OWASP, SAST, DAST) for vulnerabilities.
+  - Performance testing for expected load and scalability.
+  - Compliance testing for data protection and privacy (GDPR, DSGVO).
+  - Accessibility testing for WCAG compliance.
+  - Voice assistant testing for speech recognition accuracy and user experience.
+  - User acceptance testing (UAT) for all critical flows.
+  
 
