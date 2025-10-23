@@ -341,3 +341,125 @@ FinDogAI prioritizes a **voice-first, eyes-free interaction model** optimized fo
 ### **Epic 6: Reporting, Export & MVP Polish**
 **Goal:** Add PDF generation, job financial summaries, offline sync status visibility, and final UX polish to deliver production-ready MVP.
 
+## Epic 1: Foundation & Authentication Infrastructure
+
+**Expanded Goal:** Establish the technical foundation for FinDogAI by setting up the Angular/Ionic/Capacitor monorepo, configuring Firebase services (Auth, Firestore, Functions), implementing multi-tenant authentication with Security Rules, deploying a basic "health check" screen, and proving the complete CI/CD pipeline works. This epic delivers a deployable application that validates the tech stack end-to-end.
+
+### Story 1.1: Project Initialization & Monorepo Setup
+
+**As a** developer,
+**I want** a properly configured monorepo with Angular/Ionic/Capacitor structure,
+**so that** I can develop the mobile app, Cloud Functions, and shared types in a unified workspace.
+
+**Acceptance Criteria:**
+
+1. Monorepo created using Nx or Turborepo with workspace configuration
+2. `/packages/mobile-app` initialized with Angular 20+ and Ionic 8+
+3. `/packages/functions` initialized with Cloud Functions (Node.js v20)
+4. `/packages/shared-types` created with TypeScript interfaces
+5. `/packages/e2e-tests` initialized with Playwright
+6. Root-level `package.json` with workspace scripts (`npm run dev`, `npm run build`, `npm test`)
+7. `.gitignore` configured (node_modules, .env, build artifacts)
+8. `README.md` with setup instructions and architecture overview
+9. All packages build successfully without errors
+10. Dev server runs locally on `http://localhost:4200`
+
+### Story 1.2: Firebase Project Configuration
+
+**As a** developer,
+**I want** Firebase project configured with europe-west1 region and necessary services enabled,
+**so that** the app can authenticate users and persist data with GDPR compliance.
+
+**Acceptance Criteria:**
+
+1. Firebase project created via Firebase Console (project ID: `findogai-mvp` or similar)
+2. Firestore database initialized in `europe-west1` (Belgium) region
+3. Firebase Authentication enabled with Email/Password provider
+4. Firebase Hosting enabled for PWA deployment
+5. Cloud Functions configured for `europe-west1` deployment
+6. Firebase Storage enabled with `europe-west1` location
+7. Firebase CLI installed and authenticated locally (`firebase login`)
+8. `.firebaserc` file created with project alias
+9. `firebase.json` configured for Hosting, Functions, Firestore rules
+10. Firebase Emulators installed (Auth, Firestore, Functions, Storage)
+11. Emulator configuration in `firebase.json` with ports defined
+12. `npm run emulators` starts all emulators successfully
+
+### Story 1.3: Multi-Tenant Authentication & User Registration
+
+**As a** new user,
+**I want** to register with email/password and have a tenant automatically created,
+**so that** my data is isolated from other users in the system.
+
+**Acceptance Criteria:**
+
+1. Registration screen with fields: email, password, displayName
+2. Form validation: email format, password strength (min 8 chars), required fields
+3. On successful registration, Firebase Auth user created
+4. Custom claim `tenant_id` set to user's UID (user is their own tenant)
+5. Firestore document `/users/{tenantId}/personProfile` created with displayName, email, language (default: cs), createdAt
+6. Firestore document `/users/{tenantId}/businessProfile` created with currency (CZK), vatRate (21%), distanceUnit (km), createdAt
+7. Firestore document `/users/{tenantId}/teamMembers/{tenantMemberId}` auto-created for registering user with teamMemberNumber: 1, authUserId: user.uid, privileges: {canAddCosts: true, canViewFinancials: true}
+8. Success message displayed: "Welcome, [displayName]! Your account is ready."
+9. User automatically logged in and redirected to home screen
+10. Registration errors handled gracefully (email already exists, weak password, network failure)
+
+### Story 1.4: User Login & Session Management
+
+**As a** registered user,
+**I want** to log in with my email/password,
+**so that** I can access my data across devices.
+
+**Acceptance Criteria:**
+
+1. Login screen with fields: email, password
+2. "Remember me" checkbox (persists session locally)
+3. On successful login, Firebase Auth session established
+4. Custom claim `tenant_id` retrieved and stored in app state
+5. User redirected to home screen after login
+6. Login errors handled: "Invalid email/password", "User not found", "Too many attempts"
+7. "Forgot password" link triggers Firebase password reset email
+8. Session persists across app restarts (if "Remember me" checked)
+9. Logout button clears session and returns to login screen
+10. Logged-in users cannot access registration screen (redirect to home)
+
+### Story 1.5: Firestore Security Rules for Multi-Tenant Isolation
+
+**As a** system architect,
+**I want** Firestore Security Rules enforcing tenant-scoped data access,
+**so that** users cannot read or write other tenants' data.
+
+**Acceptance Criteria:**
+
+1. Security Rules file `firestore.rules` created
+2. Rule: Users can only access `/users/{tenantId}/**` where `tenantId == request.auth.token.tenant_id`
+3. Rule: Unauthenticated users have no read/write access (except public collections if needed in future)
+4. Rule: Audit logs (`/audit_logs/{logId}`) are write-only from Cloud Functions (client cannot write)
+5. Rules deployed to Firebase via `firebase deploy --only firestore:rules`
+6. Manual testing: User A cannot read User B's jobs (returns permission denied)
+7. Manual testing: Unauthenticated request to Firestore returns permission denied
+8. Security Rules validated via Firebase Emulator Suite (unit tests for rules)
+9. Rules include comments explaining tenant isolation logic
+10. Rules version controlled in git repository
+
+### Story 1.6: Basic Health Check Screen & CI/CD Validation
+
+**As a** developer,
+**I want** a deployable "health check" screen that validates Firebase connectivity,
+**so that** I can confirm the deployment pipeline works end-to-end.
+
+**Acceptance Criteria:**
+
+1. Home screen displays after login: "FinDogAI Health Check"
+2. Screen shows: Firebase Auth status (✓ Authenticated as [email])
+3. Screen shows: Firestore connectivity status (✓ Connected to [region])
+4. Screen shows: Current tenant ID (✓ Tenant: [tenantId])
+5. Screen shows: App version and build timestamp
+6. Health check writes a test document to `/users/{tenantId}/healthCheck` and reads it back
+7. If write/read succeeds, display "✓ Firestore Read/Write OK"
+8. If offline, display "⚠ Offline Mode - Sync pending"
+9. PWA deployed to Firebase Hosting via `firebase deploy --only hosting`
+10. Deployed app accessible at `https://findogai-mvp.web.app` (or custom domain)
+11. Health check screen functional in deployed PWA
+12. Capacitor Android build generates APK successfully (`npx cap build android`)
+
