@@ -2,7 +2,7 @@
 
 ## Audit log
 
-- A detailed log of operations must be developed. 
+- A detailed log of operations must be developed in the database. 
 - Changes in the database must be stored in the log together with DateTime and with the Author of the operation.
 - CREATE When, and by whom.
 - UPDATE: When, and by whom. The old value of the changed field must be stored in the log.
