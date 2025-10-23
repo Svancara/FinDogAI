@@ -175,3 +175,149 @@ FinDogAI prioritizes a **voice-first, eyes-free interaction model** optimized fo
 - **Native Builds:** Capacitor builds for iOS and Android with platform-specific permissions (microphone, filesystem) and optional OS integrations (Siri Shortcuts future consideration)
 - **Network Conditions:** Optimized for 4G with offline-first, gracefully handles 3G degradation (slower voice API responses but fully functional)
 
+## Technical Assumptions
+
+### Repository Structure: Monorepo
+
+**Decision:** Single monorepo containing mobile app (Angular/Ionic/Capacitor), Cloud Functions, shared TypeScript types, and e2e tests.
+
+**Rationale:**
+- Simplifies cross-cutting changes (data model updates affect app + functions + types)
+- Manageable complexity for MVP team size (1-2 developers)
+- Easier dependency management and versioning
+- Tools like Nx or Turborepo support monorepo workflows efficiently
+
+**Structure:**
+```
+/packages
+  /mobile-app       (Angular + Ionic + Capacitor)
+  /functions        (Cloud Functions - Node.js)
+  /shared-types     (TypeScript interfaces shared across packages)
+  /e2e-tests        (End-to-end Playwright tests)
+```
+
+### Service Architecture
+
+**High-Level Architecture:** Hybrid Client-Heavy with Serverless Backend
+
+**Components:**
+1. **Client-Side (Angular/Ionic App):**
+   - Primary business logic lives in client
+   - Firestore direct access via SDK (offline-first)
+   - Voice pipeline orchestration (STT → LLM → TTS)
+   - Local state management (NgRx or Signals)
+
+2. **Serverless Backend (Cloud Functions):**
+   - **onCreate/onUpdate/onDelete triggers:** Audit logging to `audit_logs` collection
+   - **HTTPS callable:** PDF generation (pdfmake library)
+   - **Scheduled function:** Audit log TTL cleanup (runs daily, deletes entries >1 year old)
+   - **Security Rules enforcement:** Firestore Security Rules handle authorization (multi-tenant isolation)
+
+**Rationale:**
+- Firestore offline capabilities eliminate need for custom sync backend
+- Client-heavy approach minimizes Cloud Functions costs (pay per invocation)
+- Security Rules provide declarative authorization without custom backend logic
+- Audit logging via triggers is transparent to client (no code changes required for compliance)
+
+**Why NOT Microservices:** Overkill for MVP scale; added operational complexity (service discovery, inter-service communication) not justified for expected load (50-100 users).
+
+### Testing Requirements
+
+**MVP Testing Strategy:**
+
+1. **Unit Tests (Required):**
+   - Services, utilities, state management logic
+   - Target: 70%+ code coverage for business logic
+   - Tools: Jest, Jasmine (Angular default)
+
+2. **Integration Tests (Required for Voice Pipeline):**
+   - Voice flow end-to-end (mock STT/LLM/TTS responses)
+   - Firestore offline sync scenarios (airplane mode simulation)
+   - Target: Core flows (Set Active Job, Start Journey) fully covered
+
+3. **E2E Tests (Selective):**
+   - Critical user journeys: Onboarding → Create Job → Voice Command → PDF Export
+   - Tools: **Playwright** (web and mobile), **MCP Browser tools** for debugging and interactive testing
+   - **NOT Cypress** (explicitly excluded)
+   - Target: 5-7 happy path scenarios
+
+4. **Manual Testing (Essential):**
+   - Voice recognition accuracy in real environments (car cabin, outdoor noise)
+   - Glove usability testing (touch target sizes, button discoverability)
+   - Multi-device sync validation (phone + tablet)
+
+**NOT in MVP:**
+- Performance/load testing (not needed for <100 users)
+- Accessibility automated testing (WCAG compliance via manual audit)
+- Security penetration testing (post-beta, pre-launch milestone)
+
+### Additional Technical Assumptions and Requests
+
+**Firestore Data Model:**
+```
+/users/{tenantId}/
+  /jobs/{jobId}
+    - jobNumber (counter), title, status, currency, vatRate, budget
+    - createdAt, createdBy, updatedAt, updatedBy (audit metadata)
+    /costs/{costId}
+      - ordinalNumber (counter), category, amount, description, resourceId
+      - createdAt, createdBy, updatedAt, updatedBy
+    /advances/{advanceId}
+      - ordinalNumber (counter), amount, date, note
+      - createdAt, createdBy, updatedAt, updatedBy
+    /events/{eventId}
+      - ordinalNumber (counter), type, timestamp, data (journey details, etc.)
+      - createdAt, createdBy, updatedAt, updatedBy
+  /vehicles/{vehicleId}
+    - vehicleNumber (counter), name, ratePerKm, ratePerMile
+    - createdAt, createdBy, updatedAt, updatedBy
+  /machines/{machineId}
+    - machineNumber (counter), name, hourlyRate
+    - createdAt, createdBy, updatedAt, updatedBy
+  /teamMembers/{teamMemberId}
+    - teamMemberNumber (counter), name, hourlyRate, privileges {canAddCosts, canViewFinancials}
+    - authUserId (Firebase Auth UID for login mapping)
+    - createdAt, createdBy, updatedAt, updatedBy
+  /businessProfile (document)
+    - currency, vatRate, distanceUnit
+    - createdAt, updatedAt
+  /personProfile (document)
+    - displayName, email, language, preferredVoiceProvider
+    - createdAt, updatedAt
+
+/audit_logs/{logId}
+  - operation (CREATE|UPDATE|DELETE), collection, documentId, tenantId
+  - timestamp, authorId (team member ID)
+  - before (old data for UPDATE), after (new data for CREATE/UPDATE)
+  - ttl (expires 1 year from timestamp)
+```
+
+**Voice Pipeline Providers (Configurable via Environment Variables):**
+- **STT:** Google Cloud Speech-to-Text (primary for Czech), OpenAI Whisper (fallback/testing)
+- **LLM/NLU:** OpenAI GPT-4-turbo (primary), Groq Llama3 (cost-efficient alternative), Ollama (local dev/testing)
+- **TTS:** Google Cloud Text-to-Speech (Czech voices: cs-CZ-Wavenet-A), platform-native fallback (Web Speech API)
+- **KWS:** Porcupine (Picovoice) or Vosk for on-device wake-word, configurable wake phrase (default: "Hey FinDog")
+
+**Security & Compliance:**
+- **Firebase Region:** europe-west1 (Belgium) for Firestore, Storage, Functions—GDPR/DSGVO compliance
+- **Authentication:** Firebase Auth email/password for MVP; add OAuth (Google) post-MVP
+- **Data Isolation:** Firestore Security Rules enforce `request.auth.token.tenant_id == tenantId` for all reads/writes
+- **GDPR Right-to-Erasure:** Cloud Function implements cascade delete of tenant data including audit logs
+
+**Dependency Management:**
+- Node.js: v20 LTS (Cloud Functions, build tooling)
+- Angular: v20+ (latest stable)
+- Ionic: v8+ (latest stable with Capacitor support)
+- Firebase SDK: v11+ (@angular/fire)
+
+**Developer Experience:**
+- **Local Development:** Firebase Emulators (Auth, Firestore, Functions, Storage) for offline dev
+- **Voice API Mocks:** Configurable to use mock responses (skip API costs during feature dev)
+- **Environment Config:** `.env` files for API keys, provider endpoints (never commit to git)
+
+**Deployment Pipeline:**
+- **Hosting:** Firebase Hosting for PWA
+- **Native Builds:** Capacitor CLI for iOS/Android builds (local dev), CI/CD via GitHub Actions (future)
+- **Functions:** Firebase CLI (`firebase deploy --only functions`)
+- **Database:** Firestore Security Rules deployed via Firebase CLI
+
