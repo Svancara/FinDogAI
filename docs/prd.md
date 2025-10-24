@@ -61,11 +61,15 @@ FinDogAI combines voice-first interaction, offline-first Firebase/Firestore arch
 
 **FR16:** The system shall use on-device Keyword Spotting (KWS) for optional wake-word activation to enable hands-free voice flow initiation.
 
-**FR17:** The system shall implement a confirmation loop using TTS to read back parsed voice input before persisting data, allowing user correction. TTS may use platform-native offline voices when available; otherwise voice confirmation requires connectivity.
+**FR17:** The system shall implement a confirmation loop using TTS to read back parsed voice input before persisting data, allowing user correction via voice ("yes"/"no") or touch (Accept/Retry/Cancel buttons). Voice confirmation ("Say 'yes' to confirm") is the primary hands-free path; touch buttons provide fallback for noisy environments or when gloves are off. TTS may use platform-native offline voices when available; otherwise voice confirmation requires connectivity.
 
 **FR18:** The system shall assign sequential, voice-friendly numbers via Cloud Functions using transactional allocation (not client-side counters): jobNumber, teamMemberNumber, vehicleNumber, machineNumber per tenant; ordinalNumber per job (costs/advances/events). Online: allocate via HTTPS callable; Offline: assigned on sync by onCreate triggers. Gaps acceptable; duplicates prohibited.
 
 **FR19:** The system shall implement an offline sync conflict resolution policy. All mutable documents include `createdAt`, `createdBy`, `updatedAt` (serverTimestamp), and `updatedBy`. Conflicts are resolved via last-write-wins (LWW) at the document level; sequential numbers are allocated server-side to prevent ID conflicts; jobs use soft delete (`status: archived`) instead of destructive delete. Updates to deleted documents and other sync errors are surfaced in a "Sync Issues" UI with options to Discard, Retry, or Recreate as new. Audit logs provide traceability for manual review and recovery.
+
+**FR20:** The system shall support true hands-free voice confirmation via wake-word ("Hey FinDog") followed by "yes" or "no" responses to accept or retry voice commands. This enables safe operation while driving or working with gloves. Touch-based Accept/Retry/Cancel buttons remain available as fallback for noisy environments or when hands are free.
+
+**FR21:** The system shall gracefully handle voice recognition errors and edge cases: background noise interference, unrecognized accents/technical terms, network timeouts during STT/LLM/TTS, Firestore write failures, device storage full (offline queue), battery-critical warnings during voice operations, and wrong-language detection. Each error scenario shall provide clear user feedback and recovery options (Retry, Switch to Manual Entry, Cancel).
 
 
 ### Non-Functional Requirements
@@ -106,7 +110,7 @@ FinDogAI prioritizes a **voice-first, eyes-free interaction model** optimized fo
 
 ### Key Interaction Paradigms
 
-1. **Voice-First with Visual Confirmation:** Primary flow is speak → see confirmation → approve/correct. Voice commands trigger immediate visual feedback showing parsed entities (job ID, amounts, odometer readings) with large Accept/Retry buttons.
+1. **Voice-First with Dual Confirmation Modes:** Primary flow is speak → hear TTS readback → respond "yes"/"no" (hands-free) OR tap Accept/Retry/Cancel (fallback). Voice commands trigger immediate visual feedback showing parsed entities (job ID, amounts, odometer readings). TTS plays confirmation prompt: "Say 'yes' to confirm or 'no' to retry." Wake-word detection remains active during confirmation to capture voice responses.
 
 2. **Active Job Context Banner:** Persistent visual indicator at top of every screen showing currently active job (number + title) with quick-tap to change. Banner is always visible (non-dismissible) to reinforce the mental model that all actions apply to the active job unless specified otherwise.
 
@@ -130,7 +134,7 @@ FinDogAI prioritizes a **voice-first, eyes-free interaction model** optimized fo
 
 6. **Settings/Business Profile:** One-time setup wizard style for currency, VAT, distance unit, language preference, voice provider configuration (for developers).
 
-7. **Voice Confirmation Modal:** Full-screen overlay during voice interaction showing real-time transcription, parsed entities in structured format, and Accept/Retry/Cancel actions. TTS readback plays while visual display updates—user waits for audio confirmation before proceeding (non-dismissible during TTS playback).
+7. **Voice Confirmation Modal:** Full-screen overlay during voice interaction showing real-time transcription, parsed entities in structured format, and Accept/Retry/Cancel actions. TTS readback plays confirmation prompt ending with "Say 'yes' to confirm or 'no' to retry." Wake-word detection remains active to capture voice responses ("yes" = Accept, "no" = Retry). Touch buttons remain enabled as fallback. Modal is non-dismissible during TTS playback to prevent accidental interruption.
 
 ### Accessibility: WCAG AA
 
@@ -748,17 +752,21 @@ FinDogAI prioritizes a **voice-first, eyes-free interaction model** optimized fo
 **Acceptance Criteria:**
 
 1. Voice Confirmation Modal displays parsed intent in structured format: "✓ Job: **123 - Smith, Brno**"
-2. TTS service generates audio from confirmation text: "Setting active job to one two three, Smith, Brno"
+2. TTS service generates audio from confirmation text: "Setting active job to one two three, Smith, Brno. Say 'yes' to confirm or 'no' to retry."
 3. TTS uses configured provider (Google Cloud Text-to-Speech primary) with language from personProfile
 4. Czech TTS voice: cs-CZ-Wavenet-A (female) or cs-CZ-Wavenet-B (male) - user preference in future
 5. TTS audio plays automatically when modal displays parsed result
-6. While TTS plays, Accept/Retry/Cancel buttons are disabled (visual state: grayed out)
-7. After TTS completes (audio ends), buttons become enabled
-8. User cannot dismiss modal during TTS playback (prevents accidental interruption)
-9. Accept button: Executes action (sets active job), dismisses modal, shows success message
-10. Retry button: Clears modal, returns to microphone button ready state (user can re-record)
-11. Cancel button: Dismisses modal, no action taken
-12. TTS latency target: <2 seconds from intent parse to audio playback start
+6. After TTS completes, wake-word detection (KWS) remains active to listen for "yes" or "no" voice responses
+7. Voice response "yes" (or Czech "ano") → triggers Accept action (same as tapping Accept button)
+8. Voice response "no" (or Czech "ne") → triggers Retry action (same as tapping Retry button)
+9. Touch buttons (Accept/Retry/Cancel) remain enabled throughout as fallback for noisy environments or when hands are free
+10. User cannot dismiss modal during TTS playback (prevents accidental interruption)
+11. Accept action (voice "yes" or button tap): Executes action (sets active job), dismisses modal, shows success message
+12. Retry action (voice "no" or button tap): Clears modal, returns to microphone button ready state (user can re-record)
+13. Cancel button: Dismisses modal, no action taken (no voice equivalent for safety—requires deliberate touch)
+14. TTS latency target: <2 seconds from intent parse to audio playback start
+15. Voice response timeout: If no "yes"/"no" detected within 10 seconds after TTS ends, buttons remain available (no auto-dismiss)
+16. Mock mode: Simulates TTS playback instantly; voice responses can be simulated via test UI controls
 13. Mock mode plays platform-native TTS (Web Speech API) or skips audio playback
 14. Offline (production): TTS is not invoked; platform-native TTS may be used only to announce AI unavailability; no queuing
 
@@ -773,8 +781,8 @@ FinDogAI prioritizes a **voice-first, eyes-free interaction model** optimized fo
 1. User taps microphone button, says: "Set active job to 123" (or Czech: "Nastav aktivní práci na 123")
 2. STT transcribes → LLM parses → Job #123 queried from Firestore → TTS confirms
 3. Voice Confirmation Modal displays: "✓ Job: **123 - Smith, Brno**" with Accept/Retry/Cancel buttons
-4. TTS plays: "Setting active job to one two three, Smith, Brno"
-5. User taps Accept → Active job state saved to app state (NgRx/Signals) and localStorage for persistence
+4. TTS plays: "Setting active job to one two three, Smith, Brno. Say 'yes' to confirm or 'no' to retry."
+5. User responds "yes" (voice) OR taps Accept button → Active job state saved to app state (NgRx/Signals) and localStorage for persistence
 6. Active Job Banner (persistent, top of screen) updates to show: "[123] Smith, Brno" with Deep Blue background
 7. Success message (toast): "Job 123 set as active" (in user's language)
 8. Modal dismisses, user returns to Voice Command Hub
@@ -783,8 +791,33 @@ FinDogAI prioritizes a **voice-first, eyes-free interaction model** optimized fo
 11. Tapping active job banner opens quick "Change Active Job" modal with jobs list (tap to select new job)
 12. Offline development mode only: transcription/intent/TTS use mock providers; in production offline, voice interactions are disabled (no recording, no NLU/TTS); use manual flow.
 13. End-to-end flow (tap mic → accept) completes in ≤10 seconds (median) and ≤14 seconds (P95) on typical 4G network conditions with real providers
-14. Voice flow tested with: numeric job IDs ("123"), partial titles ("Smith"), full titles ("Smith, Brno"), Czech phrases
+14. Voice flow tested with: numeric job IDs ("123"), partial titles ("Smith"), full titles ("Smith, Brno"), Czech phrases, voice confirmation responses ("yes"/"no", "ano"/"ne")
 15. Error handling: "Job 999 not found. Say a valid job number or name."
+16. Hands-free confirmation: After TTS ends, KWS listens for "yes"/"no"; if detected, executes corresponding action without requiring touch
+
+
+### Story 3.7: Voice Error Handling & Recovery Flows
+
+**As a** user,
+**I want** clear feedback and recovery options when voice recognition fails,
+**so that** I can complete my task despite errors.
+
+**Acceptance Criteria:**
+
+1. **Background Noise Interference:** If STT confidence score <0.6 (provider-specific threshold), show warning: "Audio unclear. Try again in a quieter location." with Retry/Cancel buttons
+2. **Network Timeout (STT/LLM/TTS):** If request exceeds 10 seconds, show: "Network timeout. Check connection and retry." with Retry/Switch to Manual Entry/Cancel options
+3. **Unrecognized Intent:** If LLM returns `intent: "unknown"` or confidence <0.7, show: "I didn't understand that. Try rephrasing or use manual entry." with Retry/Manual Entry buttons
+4. **Firestore Write Failure:** If cost/event creation fails (security rules, network error), show: "Could not save. [Error reason]. Retry or save manually." with Retry/Manual Entry/Cancel
+5. **Device Storage Full:** If offline queue write fails due to storage, show: "Device storage full. Free up space to continue." with link to device settings; disable voice recording until resolved
+6. **Battery Critical (<10%):** Show warning banner: "Low battery. Voice features may be unreliable. Consider manual entry." Voice remains enabled but user is warned
+7. **Wrong Language Detection:** If user speaks English but personProfile.language = Czech (or vice versa), LLM may fail to parse; show: "Language mismatch detected. Switch to [detected language]?" with Switch/Retry/Cancel
+8. **Technical Terms Not Recognized:** If STT transcribes incorrectly (e.g., "plasterboard" → "plastic board"), user sees incorrect transcription in modal and can tap Retry before Accept
+9. **Missing Required Entities:** If LLM parses intent but missing critical entity (e.g., `AddMaterialCost` without `amount`), prompt: "Please say the amount." and re-activate microphone for additional input
+10. **Accent/Pronunciation Issues:** If STT consistently fails for specific user, provide feedback: "Having trouble? Try speaking more slowly or use manual entry." after 3 consecutive failures
+11. **All Error States:** Include "Switch to Manual Entry" button that dismisses voice modal and opens corresponding manual form (pre-filled with any successfully parsed data)
+12. **Error Logging:** All voice errors logged to audit logs with: timestamp, error type, transcription (if available), intent (if available), user action (Retry/Manual/Cancel)
+13. **Mock Mode:** Errors can be simulated via developer settings (e.g., force STT timeout, force low confidence, force write failure) for testing
+14. **Offline Production:** Voice disabled entirely; attempting to tap microphone shows: "Voice features require internet connection. Use manual entry." with link to manual form
 
 ---
 
@@ -795,8 +828,9 @@ FinDogAI prioritizes a **voice-first, eyes-free interaction model** optimized fo
 - 3.2: Microphone access (can't transcribe without audio input)
 - 3.3: STT (converts audio to text)
 - 3.4: LLM NLU (converts text to structured intent)
-- 3.5: TTS (confirmation loop pattern)
+- 3.5: TTS (confirmation loop pattern with hands-free voice confirmation)
 - 3.6: End-to-end integration (validates entire pipeline with Set Active Job)
+- 3.7: Error handling (comprehensive recovery flows for production readiness)
 
 **Vertical Slice Validation:**
 - After 3.2: Audio recording works (can capture voice)
@@ -879,8 +913,8 @@ Select 1-9 or just type your question/feedback:
 1. User taps microphone button, says: "I'm going to Brno in Transporter, odometer 12345" (or Czech: "Jedu do Brna v Transporteru, kilometr 12345")
 2. STT transcribes → LLM parses → Vehicle queried → TTS confirms
 3. Voice Confirmation Modal displays: "✓ Journey to **Brno** | Vehicle: **[1] Transporter** | Odometer: **12,345 km**"
-4. TTS plays: "Starting journey to Brno in Transporter, odometer one two three four five"
-5. User taps Accept → Journey event created in `/tenants/{tenantId}/jobs/{activeJobId}/events/{eventId}`
+4. TTS plays: "Starting journey to Brno in Transporter, odometer one two three four five. Say 'yes' to confirm or 'no' to retry."
+5. User responds "yes" (voice) OR taps Accept button → Journey event created in `/tenants/{tenantId}/jobs/{activeJobId}/events/{eventId}`
 6. Event document: ordinalNumber (sequence), type: "journey_start", timestamp (now), data: {destination, vehicle: {full vehicle object copy}, odometerStart: 12345, odometerEnd: null, calculatedDistance: null, calculatedCost: null}, createdAt, createdBy (current team member ID)
 7. Success message (toast): "Journey to Brno started" (in user's language)
 8. Journey event displayed in Job Detail → Events timeline: "[ordinalNumber] Journey to Brno - Transporter - 12,345 km"
@@ -888,6 +922,7 @@ Select 1-9 or just type your question/feedback:
 10. End-to-end flow completes in <10 seconds on 4G
 11. Error handling: "No vehicles found. Add a vehicle in settings first."
 12. If odometer reading missing from transcription, prompt: "Please say odometer reading."
+13. Hands-free confirmation: After TTS ends, KWS listens for "yes"/"no"; voice response triggers corresponding action
 
 ### Story 4.3: Manual Cost Entry - Transport Category
 
@@ -997,7 +1032,7 @@ Select 1-9 or just type your question/feedback:
 3. On Accept: Update that event with `odometerEnd`, compute `calculatedDistance = max(0, odometerEnd - odometerStart)`, and `calculatedCost = calculatedDistance * vehicle.ratePerDistanceUnit` (rounded per currency rules)
 4. Also create a Transport cost at `/tenants/{tenantId}/jobs/{jobId}/costs/{costId}` with: `category: "Transport"`, `mode: "distance"`, `distance`, `vehicle` (full copy), `amount: calculatedCost`, ordinalNumber sequence, `createdAt/By`
 5. Validation: If no open journey, show "No ongoing journey to end"; if `odometerEnd < odometerStart`, prompt to re-enter
-6. TTS confirmation reads back: destination (if known), vehicle, end reading, calculated distance, and cost; user taps Accept/Retry/Cancel
+6. TTS confirmation reads back: destination (if known), vehicle, end reading, calculated distance, and cost, ending with "Say 'yes' to confirm or 'no' to retry."; user responds via voice ("yes"/"no") or taps Accept/Retry/Cancel
 7. Error handling: Missing odometer → prompt; missing rate on vehicle → fallback to create distance-only cost with `amount: null` and banner "Set vehicle rate to price later"
 8. Offline: Voice disabled in production offline; manual End Journey remains available (enter end odometer in Events)
 9. Tests (mock providers): StartJourney then EndJourney → event updated and cost created; negative/zero distance handled; missing open journey shows error
@@ -1014,7 +1049,7 @@ Select 1-9 or just type your question/feedback:
 2. Amount parsing supports integers/decimals; currency defaults to businessProfile.currency
 3. If `quantity` and `unitPrice` present, compute `amount = quantity * unitPrice` (rounded); store all three
 4. On Accept: Create cost under active job with `category: "Material"`, fields: `amount`, optional `quantity`, `unitPrice`, `description`, `createdAt/By`, sequential `ordinalNumber`
-5. TTS confirmation summarizes parsed values: "Material, 10 × 200 = 2,000 CZK, 'plasterboard'. Save?"
+5. TTS confirmation summarizes parsed values: "Material, 10 × 200 = 2,000 CZK, 'plasterboard'. Say 'yes' to confirm or 'no' to retry."
 6. Validation: If parsed amount missing, prompt: "Please say amount"; if no active job, show: "Set an active job first"
 7. Privileges: Requires `canAddCosts: true`; otherwise show "Permission denied"
 8. Offline: Voice disabled in production offline; manual Material entry available in Story 4.4
@@ -1032,7 +1067,7 @@ Select 1-9 or just type your question/feedback:
 2. Default team member: current user’s team member resource (`teamMembers` where `authUserId == uid`); if a different member is specified, resolve by number or name
 3. Rate selection: use provided `hourlyRate` if present; otherwise teamMember.hourlyRate; compute `amount = hours * rate` (rounded)
 4. On Accept: Create cost with `category: "Labor"`, `hours`, `rate`, `amount`, and embedded `teamMember` copy (id, number, name, hourlyRate); set `createdAt/By`, `ordinalNumber`
-5. TTS reads back: "Labor, 3.5 hours for Petr at 400 CZK/h = 1,400 CZK. Save?"
+5. TTS reads back: "Labor, 3.5 hours for Petr at 400 CZK/h = 1,400 CZK. Say 'yes' to confirm or 'no' to retry."
 6. Validation: Missing hours → prompt; unknown member → prompt to repeat or default to current user
 7. Privileges: Requires `canAddCosts: true`; amounts hidden in UI if current viewer lacks `canViewFinancials`
 8. Offline: Voice disabled in production offline; manual Labor entry available in Story 4.4
@@ -1048,7 +1083,7 @@ Select 1-9 or just type your question/feedback:
 
 1. Intent added: `QuickExpense` with entities: `amount` and optional `description`
 2. On Accept: Create cost with `category: "Other"`, `amount`, optional `description`, `createdAt/By`, `ordinalNumber`
-3. TTS confirmation: "Other expense, 50 CZK, 'parking'. Save?"
+3. TTS confirmation: "Other expense, 50 CZK, 'parking'. Say 'yes' to confirm or 'no' to retry."
 4. Validation: If amount missing, prompt; if no active job, prompt to set one
 5. Privileges: Requires `canAddCosts: true`; viewers without `canViewFinancials` see description but amounts masked
 6. Offline: Voice disabled in production offline; manual Other entry available in Story 4.4
@@ -1294,7 +1329,9 @@ Select 1-9 or just type your question/feedback:
 **Acceptance Criteria:**
 
 1. **Functional Testing:** All user stories from Epics 1-6 manually tested and passing
-2. **Voice Flows:** Core voice flows (Set Active Job, Start Journey, End Journey, Add Material Cost, Record Work Hours, Quick Expense) tested with realistic variations (different phrasings, Czech + English, numeric/text identifiers) — baseline end-to-end success ≥80% in controlled conditions; report WER (median/P95), intent F1, and numeric exact-match; improvements tracked post-MVP
+2. **Voice Flows:** Core voice flows (Set Active Job, Start Journey, End Journey, Add Material Cost, Record Work Hours, Quick Expense) tested with realistic variations (different phrasings, Czech + English, numeric/text identifiers, hands-free "yes"/"no" confirmation responses) — baseline end-to-end success ≥80% in controlled conditions; report WER (median/P95), intent F1, and numeric exact-match; improvements tracked post-MVP
+2a. **Hands-Free Confirmation:** Validate voice confirmation works: speak command → hear TTS → say "yes" → action executes without touch; say "no" → retry flow; touch buttons remain functional as fallback
+2b. **Voice Error Handling:** Test all error scenarios from Story 3.7: network timeout, low STT confidence, unrecognized intent, storage full, battery critical, wrong language, missing entities — verify clear error messages and recovery options (Retry/Manual Entry/Cancel)
 3. **Offline Testing:** Airplane mode scenarios validated: Create job/cost offline → sync on reconnection → verify data on second device
 4. **Multi-Device Sync:** Same tenant logged in on phone + tablet → changes on one device appear on other within 10 seconds
 5. **Privilege Enforcement:** Test user with restricted privileges cannot access financial data or add costs (UI + API)
