@@ -35,7 +35,7 @@ FinDogAI combines voice-first interaction, offline-first Firebase/Firestore arch
 
 **FR3:** The system shall provide manual entry screens for creating, editing, and deleting costs across five categories: Transport, Material, Labor, Machine, and Other, with support for referencing items by sequential ID in voice commands (e.g., "Update material 45").
 
-**FR4:** The system shall provide CRUD operations for Jobs with fields: auto-assigned jobNumber (Firestore counter), title, description, status (active/completed/archived), currency (ISO 4217), VAT rate, and budget.
+**FR4:** The system shall provide CRUD operations for Jobs with fields: auto-assigned jobNumber (server-allocated sequence), title, description, status (active/completed/archived), currency (ISO 4217), VAT rate, and budget.
 
 **FR5:** The system shall provide a Business Profile setup for one-time configuration of default currency, VAT rate, and distance unit (km/miles).
 
@@ -45,7 +45,7 @@ FinDogAI combines voice-first interaction, offline-first Firebase/Firestore arch
 
 **FR8:** The system shall implement comprehensive audit logging via Cloud Functions triggers (onCreate/onUpdate/onDelete) that capture full operation history to a separate audit_logs collection, including: operation type, timestamp, author (user ID), old values (for UPDATE), and complete object snapshots (for DELETE). Audit logs are backend-only (no user-facing UI) and auto-expire after 1 year for cost optimization.
 
-**FR9:** The system shall track Advances as a per-job subcollection with auto-assigned ordinalNumber (Firestore counter), displaying sum of advances vs sum of costs.
+**FR9:** The system shall track Advances as a per-job subcollection with auto-assigned ordinalNumber (server-allocated per-job sequence), displaying sum of advances vs sum of costs.
 
 **FR10:** The system shall implement Firebase Authentication (email/password minimum) with Firestore Security Rules enforcing tenantId-scoped read/write isolation under `/users/{tenantId}/` paths.
 
@@ -63,7 +63,7 @@ FinDogAI combines voice-first interaction, offline-first Firebase/Firestore arch
 
 **FR17:** The system shall implement a confirmation loop using TTS to read back parsed voice input before persisting data, allowing user correction. TTS may use platform-native offline voices when available; otherwise voice confirmation requires connectivity.
 
-**FR18:** The system shall use FieldValue.increment() for sequential auto-numbering (jobNumber, teamMemberNumber, vehicleNumber, machineNumber per tenant; ordinalNumber for costs/advances/events per job) to enable voice-friendly numeric references.
+**FR18:** The system shall assign sequential, voice-friendly numbers via Cloud Functions using transactional allocation (not client-side counters): jobNumber, teamMemberNumber, vehicleNumber, machineNumber per tenant; ordinalNumber per job (costs/advances/events). Online: allocate via HTTPS callable; Offline: assigned on sync by onCreate triggers. Gaps acceptable; duplicates prohibited.
 
 ### Non-Functional Requirements
 
@@ -210,6 +210,8 @@ FinDogAI prioritizes a **voice-first, eyes-free interaction model** optimized fo
 2. **Serverless Backend (Cloud Functions):**
    - **onCreate/onUpdate/onDelete triggers:** Audit logging to `audit_logs` collection
    - **HTTPS callable:** PDF generation (pdfmake library)
+   - **HTTPS callable:** allocateSequence (transactional) — allocates next number for tenant-level sequences (jobNumber, vehicleNumber, machineNumber, teamMemberNumber) and per-job sequence (ordinalNumber)
+   - **onCreate assignment triggers:** when an entity is created without its sequence field (offline create), assign the next number atomically and write it back to the document
    - **Scheduled function:** Audit log TTL cleanup (runs daily, deletes entries >1 year old)
    - **Security Rules enforcement:** Firestore Security Rules handle authorization (multi-tenant isolation)
 
@@ -257,25 +259,25 @@ FinDogAI prioritizes a **voice-first, eyes-free interaction model** optimized fo
 ```
 /users/{tenantId}/
   /jobs/{jobId}
-    - jobNumber (counter), title, status, currency, vatRate, budget
+    - jobNumber (sequence), title, status, currency, vatRate, budget
     - createdAt, createdBy, updatedAt, updatedBy (audit metadata)
     /costs/{costId}
-      - ordinalNumber (counter), category, amount, description, resourceId
+      - ordinalNumber (sequence), category, amount, description, resourceId
       - createdAt, createdBy, updatedAt, updatedBy
     /advances/{advanceId}
-      - ordinalNumber (counter), amount, date, note
+      - ordinalNumber (sequence), amount, date, note
       - createdAt, createdBy, updatedAt, updatedBy
     /events/{eventId}
-      - ordinalNumber (counter), type, timestamp, data (journey details, etc.)
+      - ordinalNumber (sequence), type, timestamp, data (journey details, etc.)
       - createdAt, createdBy, updatedAt, updatedBy
   /vehicles/{vehicleId}
-    - vehicleNumber (counter), name, distanceUnit (from business profile) ratePer distance unit
+    - vehicleNumber (sequence), name, distanceUnit (from business profile) ratePer distance unit
     - createdAt, createdBy, updatedAt, updatedBy
   /machines/{machineId}
-    - machineNumber (counter), name, hourlyRate
+    - machineNumber (sequence), name, hourlyRate
     - createdAt, createdBy, updatedAt, updatedBy
   /teamMembers/{teamMemberId}
-    - teamMemberNumber (counter), name, hourlyRate, privileges {canAddCosts, canViewFinancials}
+    - teamMemberNumber (sequence), name, hourlyRate, privileges {canAddCosts, canViewFinancials}
     - authUserId (Firebase Auth UID for login mapping)
     - createdAt, createdBy, updatedAt, updatedBy
   /businessProfile (document)
@@ -477,11 +479,11 @@ FinDogAI prioritizes a **voice-first, eyes-free interaction model** optimized fo
 
 **Acceptance Criteria:**
 
-1. Jobs List screen displays all jobs sorted by status (active, completed, archived), then by jobNumber ascending
+1. Jobs List screen displays all jobs sorted by status (active, completed, archived), then by jobNumber ascending; records without jobNumber yet (offline-created, pending allocation) display '—' and sort after numbered entries until sync assigns a number
 2. Each job card shows: `[jobNumber] Title - Status` with financial summary (total costs, budget, remaining)
 3. "Create Job" button navigates to job creation form
 4. Job creation form fields: title (required), description, budget (optional), currency (default from businessProfile), vatRate (default from businessProfile)
-5. On save, `jobNumber` auto-assigned via FieldValue.increment() on `/users/{tenantId}/counters/jobCounter`
+5. On save (online), `jobNumber` is allocated by HTTPS callable (transactional) and returned to the client; offline, show placeholder '—' and the number is assigned on sync by an onCreate trigger
 6. New job saved to `/users/{tenantId}/jobs/{jobId}` with: jobNumber, title, description, status: "active", currency, vatRate, budget, createdAt, createdBy (current team member ID)
 7. Job detail screen displays all job fields with Edit and Archive buttons
 8. Edit job updates: title, description, budget, currency, vatRate, updatedAt, updatedBy
@@ -502,7 +504,7 @@ FinDogAI prioritizes a **voice-first, eyes-free interaction model** optimized fo
 3. "Add Vehicle" button navigates to vehicle creation form
 4. Vehicle form reads distanceUnit from businessProfile and displays single rate field labeled "Rate per [Km/Mile]" accordingly
 5. Vehicle form fields: name (required, e.g., "Transporter", "Škoda Octavia"), rate (required, labeled based on distanceUnit)
-6. On save, `vehicleNumber` auto-assigned via FieldValue.increment() on `/users/{tenantId}/counters/vehicleCounter`
+6. On save (online), `vehicleNumber` is allocated by HTTPS callable (transactional) and returned to the client; offline, the number is assigned on sync by an onCreate trigger
 7. Vehicle saved to `/users/{tenantId}/vehicles/{vehicleId}` with: vehicleNumber, name, distanceUnit (copied from businessProfile), ratePerDistanceUnit, createdAt, createdBy
 8. Edit vehicle updates: name, rate, updatedAt, updatedBy (distanceUnit remains immutable from creation time)
 9. Delete vehicle removes from Firestore immediately without reference checking (costs/events contain full vehicle copies)
@@ -521,7 +523,7 @@ FinDogAI prioritizes a **voice-first, eyes-free interaction model** optimized fo
 2. Machines list displays: `[machineNumber] Name - Rate: X CZK/hour`
 3. "Add Machine" button navigates to machine creation form
 4. Machine form fields: name (required, e.g., "Excavator", "Drill"), hourlyRate (required)
-5. On save, `machineNumber` auto-assigned via FieldValue.increment() on `/users/{tenantId}/counters/machineCounter`
+5. On save (online), `machineNumber` is allocated by HTTPS callable (transactional) and returned to the client; offline, the number is assigned on sync by an onCreate trigger
 6. Machine saved to `/users/{tenantId}/machines/{machineId}` with: machineNumber, name, hourlyRate, createdAt, createdBy
 7. Edit machine updates: name, hourlyRate, updatedAt, updatedBy
 8. Delete machine removes from Firestore immediately without reference checking (costs/events contain full machine copies)
@@ -541,7 +543,7 @@ FinDogAI prioritizes a **voice-first, eyes-free interaction model** optimized fo
 3. Registering user auto-created as team member #1 with full privileges (from Story 1.3) - this is the business owner
 4. "Add Team Member" button navigates to team member form
 5. Form fields: name (required), hourlyRate (required), email (optional for future auth), privileges: canAddCosts (toggle), canViewFinancials (toggle)
-6. On save, `teamMemberNumber` auto-assigned via FieldValue.increment() on `/users/{tenantId}/counters/teamMemberCounter`
+6. On save (online), `teamMemberNumber` is allocated by HTTPS callable (transactional) and returned to the client; offline, the number is assigned on sync by an onCreate trigger
 7. Team member saved to `/users/{tenantId}/teamMembers/{teamMemberId}` with: teamMemberNumber, name, hourlyRate, privileges, authUserId (null for MVP), createdAt, createdBy
 8. Edit team member updates: name, hourlyRate, privileges, updatedAt, updatedBy (teamMemberNumber #1 cannot modify privileges - toggles disabled)
 9. Delete team member removes from Firestore immediately without reference checking (costs/events contain full team member copies)
@@ -833,7 +835,7 @@ Select 1-9 or just type your question/feedback:
 3. Voice Confirmation Modal displays: "✓ Journey to **Brno** | Vehicle: **[1] Transporter** | Odometer: **12,345 km**"
 4. TTS plays: "Starting journey to Brno in Transporter, odometer one two three four five"
 5. User taps Accept → Journey event created in `/users/{tenantId}/jobs/{activeJobId}/events/{eventId}`
-6. Event document: ordinalNumber (counter), type: "journey_start", timestamp (now), data: {destination, vehicle: {full vehicle object copy}, odometerStart: 12345, odometerEnd: null, calculatedDistance: null, calculatedCost: null}, createdAt, createdBy (current team member ID)
+6. Event document: ordinalNumber (sequence), type: "journey_start", timestamp (now), data: {destination, vehicle: {full vehicle object copy}, odometerStart: 12345, odometerEnd: null, calculatedDistance: null, calculatedCost: null}, createdAt, createdBy (current team member ID)
 7. Success message (toast): "Journey to Brno started" (in user's language)
 8. Journey event displayed in Job Detail → Events timeline: "[ordinalNumber] Journey to Brno - Transporter - 12,345 km"
 9. Offline development mode only: mock pipeline saves event locally; in production offline, voice interactions are disabled (no recording); manual Start Journey entry remains available.
@@ -855,7 +857,7 @@ Select 1-9 or just type your question/feedback:
 4. **Distance Mode:** Distance in km/miles (number with unit label from businessProfile), Amount auto-calculated (distance × vehicle.ratePerDistanceUnit) displayed read-only
 5. **Manual Amount Mode:** Amount (number with currency), Distance field hidden, Vehicle still required
 6. On save, cost created in `/users/{tenantId}/jobs/{jobId}/costs/{costId}` where jobId is the current job context
-7. Cost document: ordinalNumber (counter), category: "transport", amount, vehicle: {full vehicle object copy with vehicleNumber, name, distanceUnit, ratePerDistanceUnit}, distance (null if manual amount mode), description, timestamp, createdAt, createdBy
+7. Cost document: ordinalNumber (sequence), category: "transport", amount, vehicle: {full vehicle object copy with vehicleNumber, name, distanceUnit, ratePerDistanceUnit}, distance (null if manual amount mode), description, timestamp, createdAt, createdBy
 8. Cost displayed in Job Detail → Costs tab: "[ordinalNumber] Transport - [vehicleNumber] Vehicle Name - X km - Y CZK" (or "- Y CZK" if distance is null)
 9. Edit cost: Tap cost item → opens form pre-filled with original mode (distance/manual), allows updates to distance/amount/description/vehicle, job context remains unchanged
 10. Delete cost: Swipe left or long-press → confirmation: "Delete cost [ordinalNumber]?" → removes from Firestore
@@ -906,7 +908,7 @@ Select 1-9 or just type your question/feedback:
 3. "Add Advance" button opens advance entry form (job context is implicit - current job from Job Detail screen)
 4. Form fields: Amount (required, number with currency from job), Date (default: today), Note (optional, e.g., "Initial deposit", "Payment #2")
 5. On save, advance created in `/users/{tenantId}/jobs/{jobId}/advances/{advanceId}` where jobId is the current job context
-6. Advance document: ordinalNumber (counter), amount, date, note, createdAt, createdBy
+6. Advance document: ordinalNumber (sequence), amount, date, note, createdAt, createdBy
 7. Edit advance: Tap item → opens form pre-filled, allows updates to amount/date/note, updatedAt, updatedBy
 8. Delete advance: Swipe left → confirmation: "Delete advance [ordinalNumber]?" → removes from Firestore
 9. Job Detail header displays financial summary: "Costs: X CZK | Advances: Y CZK | **Net Due: (X - Y) CZK**" (green if positive, red if negative)
@@ -1160,7 +1162,7 @@ Select 1-9 or just type your question/feedback:
 8. **PWA Requirements:** App installable, works offline, has app manifest and service worker (Firebase Hosting handles this)
 9. **Capacitor Builds:** Android APK builds successfully, installs on test device, all features functional (microphone, offline, etc.)
 10. **Error Handling:** No unhandled exceptions in console during 30-minute usage session
-11. **Data Integrity:** Sequential IDs (jobNumber, vehicleNumber, etc.) increment correctly without gaps or duplicates across 100+ creates
+11. **Data Integrity:** Sequential IDs (jobNumber, vehicleNumber, etc.) are unique and strictly increasing per scope across 100+ creates; no duplicates; gaps allowed (e.g., deletes/rollbacks). Offline-created records receive IDs on sync.
 12. **Audit Logging:** Verify audit logs created for all CRUD operations, TTL cleanup function executes successfully
 13. **Browser Compatibility:** Tested on Chrome, Edge, Safari (iOS + desktop) - all features work
 14. **Load Testing (Basic):** 10 concurrent users creating jobs/costs → no errors, acceptable latency (<2s for writes)
