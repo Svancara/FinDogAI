@@ -11,7 +11,7 @@
 - Deliver production-ready MVP with core voice flows (Set Active Job, Start Journey) plus high-frequency capture commands (End Journey, Add Material Cost, Record Work Hours, Quick Expense) within 6 months
 - MVP scope for 6 months (1–2 devs): Epics 1–4 + essential slices of Epics 5 and 6 only (5.1 audit triggers, 5.5 Security Rules; 6.2 offline sync status, 6.3 conflict resolution, 6.6 final QA). Defer advanced privileges, OAuth, PDF generation (Issue #11), and deep UI polish to Phase 2.
 
-- Achieve 70%+ weekly retention and 80%+ voice flow success rate among beta users
+- Achieve 80%+ voice flow success rate; pilot engagement target: ≥50% 30-day active rate among onboarded users (B2B-appropriate), measured on a rolling 30-day window
 - Validation of leakage reduction (MVP): Track proxy KPIs (capture completeness: % of costs captured same day; journey→transport cost pairing rate; % of days with zero end-of-day backlog). Compare pre/pilot baseline vs 4-week pilot. Invoicing/billing impact deferred to Phase 2.
 - Establish baseline Czech voice accuracy using domain test sets: STT WER ≤15% (median) and ≤25% (P95) in controlled conditions; intent F1 ≥0.85 for core flows; English supported as secondary
 
