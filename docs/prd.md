@@ -8,7 +8,7 @@
 - Reduce daily administrative overhead from 30-60 minutes to under 15 minutes
 - Provide offline-first cost tracking that works reliably without network connectivity
 - Eliminate revenue leakage from forgotten expenses (currently 5-15% of billable costs)
-- Deliver production-ready MVP with core voice flows (Set Active Job + Start Journey) within 6 months
+- Deliver production-ready MVP with core voice flows (Set Active Job, Start Journey) plus high-frequency capture commands (End Journey, Add Material Cost, Record Work Hours, Quick Expense) within 6 months
 - Achieve 70%+ weekly retention and 80%+ voice flow success rate among beta users
 - Establish baseline Czech voice accuracy using domain test sets: STT WER ≤15% (median) and ≤25% (P95) in controlled conditions; intent F1 ≥0.85 for core flows; English supported as secondary
 
@@ -16,7 +16,7 @@
 
 Small entrepreneurs and craftsmen in Central Europe face a persistent profitability problem: accurately remembering and recording all costs, purchases, mileage, and work hours at day's end. This manual recall process creates revenue leakage (estimated 5-15% of billable costs go unrecorded), cognitive burden after long workdays, and safety concerns from attempting to type notes while driving. Current solutions—generic expense trackers, voice assistants, and job management software—fail to address the unique combination of needs: hands-free voice capture, offline-first reliability, domain-specific intent recognition for craftsman workflows, and job-specific cost allocation.
 
-FinDogAI combines voice-first interaction, offline-first Firebase/Firestore architecture, and AI-powered natural language understanding to create a hands-free assistant optimized for mobile craftsmen. The MVP focuses on two critical voice flows (Set Active Job + Start Journey with Odometer) to prove the value proposition. The solution leverages on-device keyword spotting for true hands-free operation, streaming speech-to-text with multilingual support, LLM-based intent recognition, and conversational TTS confirmation—production voice flows require network STT/LLM/TTS; offline development uses mock providers; when offline in the field, voice interactions are disabled and the app operates without AI support via manual flows; on-device KWS and platform-native TTS may operate offline for availability notifications; automatic sync when connectivity returns.
+FinDogAI combines voice-first interaction, offline-first Firebase/Firestore architecture, and AI-powered natural language understanding to create a hands-free assistant optimized for mobile craftsmen. The MVP focuses on foundational voice flows (Set Active Job + Start Journey with Odometer) and includes high-frequency capture commands (End Journey, Add Material Cost, Record Work Hours, Quick Expense) to match daily workflows. The solution leverages on-device keyword spotting for true hands-free operation, streaming speech-to-text with multilingual support, LLM-based intent recognition, and conversational TTS confirmation—production voice flows require network STT/LLM/TTS; offline development uses mock providers; when offline in the field, voice interactions are disabled and the app operates without AI support via manual flows; on-device KWS and platform-native TTS may operate offline for availability notifications; automatic sync when connectivity returns.
 
 ### Change Log
 
@@ -238,7 +238,7 @@ FinDogAI prioritizes a **voice-first, eyes-free interaction model** optimized fo
 2. **Integration Tests (Required for Voice Pipeline):**
    - Voice flow end-to-end (mock STT/LLM/TTS responses)
    - Firestore offline sync scenarios (airplane mode simulation)
-   - Target: Core flows (Set Active Job, Start Journey) fully covered
+   - Target: Core flows (Set Active Job, Start Journey, End Journey, Add Material Cost, Record Work Hours, Quick Expense) covered
 
 3. **E2E Tests (Selective):**
    - Critical user journeys: Onboarding → Create Job → Voice Command → PDF Export
@@ -984,6 +984,76 @@ Select 1-9 or just type your question/feedback:
 12. Offline mode: Costs display from local cache, sync status indicator if pending writes
 
 ---
+### Story 4.7: End Journey Voice Flow (Close Journey + Create Transport Cost)
+
+**As a** craftsman,
+**I want** to say "End journey, odometer [reading]" and have the app close the current journey and record the cost,
+**so that** distance and transport cost are captured without manual entry.
+
+**Acceptance Criteria:**
+
+1. Intent added: `EndJourney` with entity `odometerReading` (integer)
+2. Precondition: An open journey exists for the active job (most recent `journey_start` event with `odometerEnd == null`)
+3. On Accept: Update that event with `odometerEnd`, compute `calculatedDistance = max(0, odometerEnd - odometerStart)`, and `calculatedCost = calculatedDistance * vehicle.ratePerDistanceUnit` (rounded per currency rules)
+4. Also create a Transport cost at `/tenants/{tenantId}/jobs/{jobId}/costs/{costId}` with: `category: "Transport"`, `mode: "distance"`, `distance`, `vehicle` (full copy), `amount: calculatedCost`, ordinalNumber sequence, `createdAt/By`
+5. Validation: If no open journey, show "No ongoing journey to end"; if `odometerEnd < odometerStart`, prompt to re-enter
+6. TTS confirmation reads back: destination (if known), vehicle, end reading, calculated distance, and cost; user taps Accept/Retry/Cancel
+7. Error handling: Missing odometer → prompt; missing rate on vehicle → fallback to create distance-only cost with `amount: null` and banner "Set vehicle rate to price later"
+8. Offline: Voice disabled in production offline; manual End Journey remains available (enter end odometer in Events)
+9. Tests (mock providers): StartJourney then EndJourney → event updated and cost created; negative/zero distance handled; missing open journey shows error
+
+### Story 4.8: Add Material Cost Voice Flow
+
+**As a** craftsman,
+**I want** to say "Material [amount] for [description]" or "Material [qty] by [unit price] [description]",
+**so that** I can quickly record material purchases hands-free.
+
+**Acceptance Criteria:**
+
+1. Intent added: `AddMaterialCost` with entities: `amount` OR (`quantity`, `unitPrice`), and optional `description`
+2. Amount parsing supports integers/decimals; currency defaults to businessProfile.currency
+3. If `quantity` and `unitPrice` present, compute `amount = quantity * unitPrice` (rounded); store all three
+4. On Accept: Create cost under active job with `category: "Material"`, fields: `amount`, optional `quantity`, `unitPrice`, `description`, `createdAt/By`, sequential `ordinalNumber`
+5. TTS confirmation summarizes parsed values: "Material, 10 × 200 = 2,000 CZK, 'plasterboard'. Save?"
+6. Validation: If parsed amount missing, prompt: "Please say amount"; if no active job, show: "Set an active job first"
+7. Privileges: Requires `canAddCosts: true`; otherwise show "Permission denied"
+8. Offline: Voice disabled in production offline; manual Material entry available in Story 4.4
+9. Tests: Variants with amount only, qty×price, with/without description; Czech phrases recognized
+
+### Story 4.9: Record Work Hours (Labor) Voice Flow
+
+**As a** craftsman,
+**I want** to say "Labor [hours] hours" (optionally "for [member]" and/or "at [rate]")
+**so that** labor time is recorded with correct cost.
+
+**Acceptance Criteria:**
+
+1. Intent added: `AddLaborHours` with entities: `hours` (decimal), optional `teamMemberIdentifier` (name/number), optional `hourlyRate`
+2. Default team member: current user’s team member resource (`teamMembers` where `authUserId == uid`); if a different member is specified, resolve by number or name
+3. Rate selection: use provided `hourlyRate` if present; otherwise teamMember.hourlyRate; compute `amount = hours * rate` (rounded)
+4. On Accept: Create cost with `category: "Labor"`, `hours`, `rate`, `amount`, and embedded `teamMember` copy (id, number, name, hourlyRate); set `createdAt/By`, `ordinalNumber`
+5. TTS reads back: "Labor, 3.5 hours for Petr at 400 CZK/h = 1,400 CZK. Save?"
+6. Validation: Missing hours → prompt; unknown member → prompt to repeat or default to current user
+7. Privileges: Requires `canAddCosts: true`; amounts hidden in UI if current viewer lacks `canViewFinancials`
+8. Offline: Voice disabled in production offline; manual Labor entry available in Story 4.4
+9. Tests: Current user default, specified member, with/without explicit rate; Czech command variants
+
+### Story 4.10: Quick Expense (Other) Voice Flow
+
+**As a** craftsman,
+**I want** to say "Expense [amount] [short note]",
+**so that** I can capture small miscellaneous costs quickly.
+
+**Acceptance Criteria:**
+
+1. Intent added: `QuickExpense` with entities: `amount` and optional `description`
+2. On Accept: Create cost with `category: "Other"`, `amount`, optional `description`, `createdAt/By`, `ordinalNumber`
+3. TTS confirmation: "Other expense, 50 CZK, 'parking'. Save?"
+4. Validation: If amount missing, prompt; if no active job, prompt to set one
+5. Privileges: Requires `canAddCosts: true`; viewers without `canViewFinancials` see description but amounts masked
+6. Offline: Voice disabled in production offline; manual Other entry available in Story 4.4
+7. Tests: Amount only, amount + note; verify amounts masked for restricted viewers
+
 
 ## Epic 5: Audit Logging & Team Privileges
 
@@ -1224,7 +1294,7 @@ Select 1-9 or just type your question/feedback:
 **Acceptance Criteria:**
 
 1. **Functional Testing:** All user stories from Epics 1-6 manually tested and passing
-2. **Voice Flows:** Both voice flows (Set Active Job, Start Journey) tested with 20+ variations (different phrasings, Czech + English, numeric/text identifiers) — baseline end-to-end success ≥80% in controlled conditions; report WER (median/P95), intent F1, and numeric exact-match; improvements tracked post-MVP
+2. **Voice Flows:** Core voice flows (Set Active Job, Start Journey, End Journey, Add Material Cost, Record Work Hours, Quick Expense) tested with realistic variations (different phrasings, Czech + English, numeric/text identifiers) — baseline end-to-end success ≥80% in controlled conditions; report WER (median/P95), intent F1, and numeric exact-match; improvements tracked post-MVP
 3. **Offline Testing:** Airplane mode scenarios validated: Create job/cost offline → sync on reconnection → verify data on second device
 4. **Multi-Device Sync:** Same tenant logged in on phone + tablet → changes on one device appear on other within 10 seconds
 5. **Privilege Enforcement:** Test user with restricted privileges cannot access financial data or add costs (UI + API)
@@ -1248,7 +1318,7 @@ Select 1-9 or just type your question/feedback:
 
 **Epic 4 (Journey Tracking & Cost Management):**
 - Completes the "cost capture" value proposition (voice + manual for all categories)
-- Start Journey is the most valuable voice flow (addresses driving safety + odometer tracking pain point)
+- Start + End Journey form the core travel pair (safety + odometer tracking); Material/Labor/Quick Expense voice capture targets the highest-frequency daily operations
 - Manual cost entry provides fallback and correction mechanism (critical for MVP trust)
 - Advances tracking rounds out job financials (costs - advances = net due)
 
