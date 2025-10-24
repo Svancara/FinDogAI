@@ -16,7 +16,7 @@
 
 Small entrepreneurs and craftsmen in Central Europe face a persistent profitability problem: accurately remembering and recording all costs, purchases, mileage, and work hours at day's end. This manual recall process creates revenue leakage (estimated 5-15% of billable costs go unrecorded), cognitive burden after long workdays, and safety concerns from attempting to type notes while driving. Current solutions—generic expense trackers, voice assistants, and job management software—fail to address the unique combination of needs: hands-free voice capture, offline-first reliability, domain-specific intent recognition for craftsman workflows, and job-specific cost allocation.
 
-FinDogAI combines voice-first interaction, offline-first Firebase/Firestore architecture, and AI-powered natural language understanding to create a hands-free assistant optimized for mobile craftsmen. The MVP focuses on two critical voice flows (Set Active Job + Start Journey with Odometer) to prove the value proposition. The solution leverages on-device keyword spotting for true hands-free operation, streaming speech-to-text with multilingual support, LLM-based intent recognition, and conversational TTS confirmation—all functioning fully offline with automatic sync when connectivity returns.
+FinDogAI combines voice-first interaction, offline-first Firebase/Firestore architecture, and AI-powered natural language understanding to create a hands-free assistant optimized for mobile craftsmen. The MVP focuses on two critical voice flows (Set Active Job + Start Journey with Odometer) to prove the value proposition. The solution leverages on-device keyword spotting for true hands-free operation, streaming speech-to-text with multilingual support, LLM-based intent recognition, and conversational TTS confirmation—production voice flows require network STT/LLM/TTS; offline development uses mock providers; when offline in the field, voice interactions are disabled and the app operates without AI support via manual flows; on-device KWS and platform-native TTS may operate offline for availability notifications; automatic sync when connectivity returns.
 
 ### Change Log
 
@@ -53,7 +53,7 @@ FinDogAI combines voice-first interaction, offline-first Firebase/Firestore arch
 
 **FR12:** The system shall require team member authentication and identification, storing the team member ID with all operations for audit trail purposes.
 
-**FR13:** The system shall enable Firestore offline persistence, ensuring all voice and manual flows function without network connectivity, with automatic background sync and visible sync status indicators.
+**FR13:** The system shall enable Firestore offline persistence, ensuring all manual flows function without network connectivity, with automatic background sync and visible sync status indicators. Production voice flows require network connectivity; when offline, voice interactions are disabled and the app shall work fully via manual flows; no audio is recorded or queued.
 
 **FR14:** The system shall generate basic PDF reports for jobs showing: job title, cost breakdown by category, sum of advances, net balance, with email option via device's default mail client.
 
@@ -61,15 +61,15 @@ FinDogAI combines voice-first interaction, offline-first Firebase/Firestore arch
 
 **FR16:** The system shall use on-device Keyword Spotting (KWS) for optional wake-word activation to enable hands-free voice flow initiation.
 
-**FR17:** The system shall implement a confirmation loop using TTS to read back parsed voice input before persisting data, allowing user correction.
+**FR17:** The system shall implement a confirmation loop using TTS to read back parsed voice input before persisting data, allowing user correction. TTS may use platform-native offline voices when available; otherwise voice confirmation requires connectivity.
 
 **FR18:** The system shall use FieldValue.increment() for sequential auto-numbering (jobNumber, teamMemberNumber, vehicleNumber, machineNumber per tenant; ordinalNumber for costs/advances/events per job) to enable voice-friendly numeric references.
 
 ### Non-Functional Requirements
 
-**NFR1:** Voice pipeline latency shall achieve post-wake-word to first STT token in <1.5 seconds on mid-range Android devices.
+**NFR1:** Voice pipeline latency (post-wake-word to first STT token) shall achieve ≤3.0 seconds (median) and ≤5.0 seconds (P95) on mid-range Android devices under typical 4G conditions.
 
-**NFR2:** Round-trip voice confirmation (user speaks → TTS responds) shall complete in <3 seconds on typical 4G network conditions.
+**NFR2:** Round-trip voice confirmation (user speaks → TTS responds) shall complete in ≤8.0 seconds (median) and ≤12.0 seconds (P95) on typical 4G network conditions.
 
 **NFR3:** Offline write operations shall provide instant local persistence with <100ms UI feedback.
 
@@ -282,7 +282,7 @@ FinDogAI prioritizes a **voice-first, eyes-free interaction model** optimized fo
     - currency, vatRate, distanceUnit
     - createdAt, updatedAt
   /personProfile (document)
-    - displayName, email, language, preferredVoiceProvider
+    - displayName, email, language, preferredVoiceProvider, aiSupportEnabled (boolean)
     - createdAt, updatedAt
 
 /audit_logs/{logId}
@@ -397,7 +397,7 @@ FinDogAI prioritizes a **voice-first, eyes-free interaction model** optimized fo
 2. Form validation: email format, password strength (min 8 chars), required fields
 3. On successful registration, Firebase Auth user created
 4. Custom claim `tenant_id` set to user's UID (user is their own tenant)
-5. Firestore document `/users/{tenantId}/personProfile` created with displayName, email, language (default: cs), createdAt
+5. Firestore document `/users/{tenantId}/personProfile` created with displayName, email, language (default: cs), aiSupportEnabled: true, createdAt
 6. Firestore document `/users/{tenantId}/businessProfile` created with currency (CZK), vatRate (21%), distanceUnit (km), createdAt
 7. Firestore document `/users/{tenantId}/teamMembers/{tenantMemberId}` auto-created for registering user with teamMemberNumber: 1, authUserId: user.uid, privileges: {canAddCosts: true, canViewFinancials: true}
 8. Success message displayed: "Welcome, [displayName]! Your account is ready."
@@ -577,17 +577,20 @@ FinDogAI prioritizes a **voice-first, eyes-free interaction model** optimized fo
 **Acceptance Criteria:**
 
 1. Settings screen has "Person Profile" section
-2. Fields displayed: Display Name (text), Email (read-only, from Firebase Auth), Language (dropdown: Czech / English)
+2. Fields displayed: Display Name (text), Email (read-only, from Firebase Auth), Language (dropdown: Czech / English), AI Support (toggle: On/Off; default On)
 3. On first access, fields pre-filled from `/users/{tenantId}/personProfile` (created in Story 1.3)
 4. Language change immediately saves to Firestore (`personProfile.language`) before UI update to ensure persistence
 5. After save completes, language change immediately updates current screen (Person Profile) UI text (Czech ↔ English using Angular i18n)
 6. Language preference applied to all subsequent screens and app restarts
 7. Voice provider configuration field: preferredVoiceProvider (dropdown: Google Cloud / OpenAI Whisper / Platform Native) for developers
 8. Language preference passed to STT/TTS providers (cs-CZ or en-US locale)
-9. Save button (for displayName/voiceProvider) updates personProfile document with: displayName, preferredVoiceProvider, updatedAt
+9. Save button (for displayName/voiceProvider/AI Support) updates personProfile document with: displayName, preferredVoiceProvider, aiSupportEnabled, updatedAt
 10. Success message: "Profile updated" (in newly selected language)
 11. Offline mode: Changes saved locally, sync when online
 12. Logout button present at bottom of settings screen
+13. AI Support toggle persists to `personProfile.aiSupportEnabled` (boolean). Default: true
+14. When AI Support is Off: Mic tap triggers platform-native TTS: "AI support is disabled. Use manual entry." No STT/LLM/TTS requests are made; header shows "AI Disabled"
+15. When AI Support is On but the device is offline: Mic tap triggers platform-native TTS: "Offline: AI support unavailable." Header shows "Offline · AI Unavailable"; no audio is recorded or queued
 
 ## Epic 3: Voice Pipeline & Active Job Context
 
@@ -610,9 +613,13 @@ FinDogAI prioritizes a **voice-first, eyes-free interaction model** optimized fo
 7. API credentials loaded from `.env` file (GOOGLE_CLOUD_API_KEY, OPENAI_API_KEY, etc.)
 8. Voice service handles errors gracefully: network failures, API quota exceeded, invalid credentials
 9. Voice service logs provider selection and latency metrics for debugging
+
+
 10. Unit tests validate each provider implementation independently
 11. Integration test validates provider switching via config change (no code recompile needed)
 12. README documents environment variable configuration for all providers
+13. Voice service gates operations by `personProfile.aiSupportEnabled` and connectivity; exposes status: ENABLED, DISABLED_BY_USER, OFFLINE
+14. In DISABLED_BY_USER or OFFLINE status, voice service does not call STT/LLM/TTS providers and returns UNAVAILABLE for voice operations (no audio recording or queuing)
 
 ### Story 3.2: Microphone Access & Audio Recording
 
@@ -632,9 +639,12 @@ FinDogAI prioritizes a **voice-first, eyes-free interaction model** optimized fo
 8. Manual stop: Tap button again, label changes to "Processing...", recording ends
 9. Recorded audio converted to format required by STT provider (WAV, FLAC, or OGG)
 10. While recording, display real-time audio level indicator (waveform or volume bars)
-11. Offline mode: Recording works without network, audio buffered for STT when online
+11. Offline (production): Voice interactions are disabled; no audio is recorded or queued; mic tap plays platform-native TTS to announce unavailability
 12. Error handling: "Recording failed. Check microphone connection."
 
+13. If personProfile.aiSupportEnabled is false, tapping microphone plays platform-native TTS: "AI support is disabled. Use manual entry." No STT/LLM/TTS requests are made; header shows "AI Disabled" badge
+14. If offline (production) with aiSupportEnabled=true, tapping microphone plays platform-native TTS: "Offline: AI support unavailable." No STT/LLM/TTS requests are made; no audio is recorded or queued; header shows "Offline · AI Unavailable"
+15. Header text format uses middle dot (U+00B7): "Offline · AI Unavailable" (exact string)
 ### Story 3.3: Speech-to-Text Integration
 
 **As a** developer,
@@ -650,7 +660,7 @@ FinDogAI prioritizes a **voice-first, eyes-free interaction model** optimized fo
 5. Transcription displayed in real-time on Voice Confirmation Modal as "Heard: [transcription]"
 6. If STT fails (network error, API error), display: "Could not transcribe audio. Try again."
 7. Retry button allows user to re-record without dismissing modal
-8. STT latency tracked: Target <1.5 seconds from recording end to transcription display
+8. STT latency tracked: Target ≤3.0 seconds median and ≤5.0 seconds P95 from recording end to transcription display
 9. Mock mode returns predefined transcription instantly (e.g., "set active job to one two three")
 10. Czech language transcription tested with sample phrases: "Nastav aktivní práci na 123"
 11. Empty transcription (silence detected) shows: "No speech detected. Please try again."
@@ -698,7 +708,7 @@ FinDogAI prioritizes a **voice-first, eyes-free interaction model** optimized fo
 11. Cancel button: Dismisses modal, no action taken
 12. TTS latency target: <2 seconds from intent parse to audio playback start
 13. Mock mode plays platform-native TTS (Web Speech API) or skips audio playback
-14. Offline mode: TTS queued, plays when connectivity returns (or uses platform-native TTS)
+14. Offline (production): TTS is not invoked; platform-native TTS may be used only to announce AI unavailability; no queuing
 
 ### Story 3.6: Set Active Job Voice Flow (End-to-End)
 
@@ -719,8 +729,8 @@ FinDogAI prioritizes a **voice-first, eyes-free interaction model** optimized fo
 9. Active job persists across app restarts (loaded from localStorage on app init)
 10. If no active job set, banner shows: "No active job. Tap to select." (tapping opens jobs list)
 11. Tapping active job banner opens quick "Change Active Job" modal with jobs list (tap to select new job)
-12. Voice flow works fully offline: transcription/intent/TTS use mock mode, active job saved locally
-13. End-to-end flow (tap mic → accept) completes in <10 seconds on 4G with real providers
+12. Offline development mode only: transcription/intent/TTS use mock providers; in production offline, voice interactions are disabled (no recording, no NLU/TTS); use manual flow.
+13. End-to-end flow (tap mic → accept) completes in ≤10 seconds (median) and ≤14 seconds (P95) on typical 4G network conditions with real providers
 14. Voice flow tested with: numeric job IDs ("123"), partial titles ("Smith"), full titles ("Smith, Brno"), Czech phrases
 15. Error handling: "Job 999 not found. Say a valid job number or name."
 
@@ -822,7 +832,7 @@ Select 1-9 or just type your question/feedback:
 6. Event document: ordinalNumber (counter), type: "journey_start", timestamp (now), data: {destination, vehicle: {full vehicle object copy}, odometerStart: 12345, odometerEnd: null, calculatedDistance: null, calculatedCost: null}, createdAt, createdBy (current team member ID)
 7. Success message (toast): "Journey to Brno started" (in user's language)
 8. Journey event displayed in Job Detail → Events timeline: "[ordinalNumber] Journey to Brno - Transporter - 12,345 km"
-9. Voice flow works fully offline: event saved locally, syncs when online
+9. Offline development mode only: mock pipeline saves event locally; in production offline, voice interactions are disabled (no recording); manual Start Journey entry remains available.
 10. End-to-end flow completes in <10 seconds on 4G
 11. Error handling: "No vehicles found. Add a vehicle in settings first."
 12. If odometer reading missing from transcription, prompt: "Please say odometer reading."
@@ -1083,6 +1093,9 @@ Select 1-9 or just type your question/feedback:
 11. Sync status uses minimal battery: Checks connectivity passively (network status events, not polling)
 12. Empty state: If online with no pending writes, just show "🟢 Online" (no clutter)
 
+13. Header shows AI status badge aligned with connectivity: when online and AI disabled → "🟢 Online · AI Disabled"; when offline and AI enabled → "🟠 Offline · AI Unavailable"
+14. AI status badge appears in the same area as connectivity (top status bar or within Active Job Banner), coalescing into a single line without overlapping UI
+15. Tapping the AI status badge opens a tooltip explaining current state and next actions: if disabled → "Enable AI in Settings › Person Profile"; if offline → "Reconnect to enable AI features"
 ### Story 6.3: UI Polish - Loading States & Skeleton Screens
 
 **As a** user,
