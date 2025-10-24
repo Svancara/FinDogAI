@@ -29,6 +29,10 @@ FinDogAI combines voice-first interaction, offline-first Firebase/Firestore arch
 | 2025-10-23 | v1.1 | Incorporated remarks: audit logging, team member privileges, sequential ID voice references | John (PM) |
 
 ## Requirements
+### Compliance Requirements (GDPR)
+
+1. **Data export/backup** - GDPR compliance requires data portability
+
 
 ### Functional Requirements
 
@@ -75,6 +79,9 @@ FinDogAI combines voice-first interaction, offline-first Firebase/Firestore arch
 **FR21:** The system shall gracefully handle voice recognition errors and edge cases: background noise interference, unrecognized accents/technical terms, network timeouts during STT/LLM/TTS, Firestore write failures, device storage full (offline queue), battery-critical warnings during voice operations, and wrong-language detection. Each error scenario shall provide clear user feedback and recovery options (Retry, Switch to Manual Entry, Cancel).
 
 **FR22:** The system shall support multi-job context and inline job targeting. Any voice or manual command may specify an inline job override (e.g., "for job 123") to apply that single operation to the specified job without changing the Active Job. If no override is specified, the Active Job is used by default. If there is no Active Job and none is specified inline, the user is prompted to specify a job or set an Active Job. The Active Job changes only via the "Set Active Job" flow.
+
+**FR23:** The system shall provide GDPR-compliant data export functionality, allowing users to download all their tenant data (jobs, costs, advances, team members, vehicles, machines, audit logs) in JSON format via Cloud Function with email delivery.
+
 
 
 ### Non-Functional Requirements
