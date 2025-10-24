@@ -47,9 +47,9 @@ FinDogAI combines voice-first interaction, offline-first Firebase/Firestore arch
 
 **FR9:** The system shall track Advances as a per-job subcollection with auto-assigned ordinalNumber (server-allocated per-job sequence), displaying sum of advances vs sum of costs.
 
-**FR10:** The system shall implement Firebase Authentication (email/password minimum) with Firestore Security Rules enforcing tenantId-scoped read/write isolation under `/users/{tenantId}/` paths.
+**FR10:** The system shall implement Firebase Authentication (email/password minimum) with Firestore Security Rules enforcing membership-based multi-tenant isolation under `/tenants/{tenantId}/**`. Access is allowed only for authenticated users that have a membership document at `/tenants/{tenantId}/members/{request.auth.uid}`; documents MUST include `tenantId` that matches the path; per-operation privileges are enforced via membership fields.
 
-**FR11:** The system shall support basic team member privilege system where the business owner (tenant creator) can assign individual privilege toggles to team members: privilege to add cost events (transport, material, labor, machine, other) and privilege to view job financial state (budget, actual costs, profit). No role templates for MVP.
+**FR11:** The system shall support a basic team member privilege model stored on membership documents (`/tenants/{tenantId}/members/{uid}`) where the owner can assign individual toggles: `canAddCosts` (allows creating/updating/deleting cost-related entities) and `canViewFinancials` (allows reading budget/actual cost/profit fields). No role templates for MVP.
 
 **FR12:** The system shall require team member authentication and identification, storing the team member ID with all operations for audit trail purposes.
 
@@ -257,35 +257,44 @@ FinDogAI prioritizes a **voice-first, eyes-free interaction model** optimized fo
 
 **Firestore Data Model:**
 ```
-/users/{tenantId}/
-  /jobs/{jobId}
-    - jobNumber (sequence), title, status, currency, vatRate, budget
+/tenants/{tenantId}/
+  members/{uid}
+    - owner (boolean), canAddCosts (boolean), canViewFinancials (boolean)
+    - status (active|disabled), lastSeenAt
+  invites/{inviteId}
+    - codeHash, expiresAt, createdBy, presetPrivileges, consumedAt (optional), email (optional)
+  jobs/{jobId}
+    - tenantId, jobNumber (sequence), title, status, currency, vatRate, budget
     - createdAt, createdBy, updatedAt, updatedBy (audit metadata)
-    /costs/{costId}
-      - ordinalNumber (sequence), category, amount, description, resourceId
+    costs/{costId}
+      - tenantId, ordinalNumber (sequence), category, amount, description, resourceId
       - createdAt, createdBy, updatedAt, updatedBy
-    /advances/{advanceId}
-      - ordinalNumber (sequence), amount, date, note
+    advances/{advanceId}
+      - tenantId, ordinalNumber (sequence), amount, date, note
       - createdAt, createdBy, updatedAt, updatedBy
-    /events/{eventId}
-      - ordinalNumber (sequence), type, timestamp, data (journey details, etc.)
+    events/{eventId}
+      - tenantId, ordinalNumber (sequence), type, timestamp, data (journey details, etc.)
       - createdAt, createdBy, updatedAt, updatedBy
-  /vehicles/{vehicleId}
-    - vehicleNumber (sequence), name, distanceUnit (from business profile) ratePer distance unit
+  vehicles/{vehicleId}
+    - tenantId, vehicleNumber (sequence), name, distanceUnit (from business profile), ratePerDistanceUnit
     - createdAt, createdBy, updatedAt, updatedBy
-  /machines/{machineId}
-    - machineNumber (sequence), name, hourlyRate
+  machines/{machineId}
+    - tenantId, machineNumber (sequence), name, hourlyRate
     - createdAt, createdBy, updatedAt, updatedBy
-  /teamMembers/{teamMemberId}
-    - teamMemberNumber (sequence), name, hourlyRate, privileges {canAddCosts, canViewFinancials}
-    - authUserId (Firebase Auth UID for login mapping)
+  teamMembers/{teamMemberId}
+    - tenantId, teamMemberNumber (sequence), name, hourlyRate
+    - authUserId (Firebase Auth UID for login mapping; owners team member #1 maps to owner)
     - createdAt, createdBy, updatedAt, updatedBy
-  /businessProfile (document)
-    - currency, vatRate, distanceUnit
+  businessProfile (document)
+    - tenantId, currency, vatRate, distanceUnit
     - createdAt, updatedAt
-  /personProfile (document)
-    - displayName, email, language, preferredVoiceProvider, aiSupportEnabled (boolean)
+  personProfile (document)
+    - tenantId, displayName, email, language, preferredVoiceProvider, aiSupportEnabled (boolean)
     - createdAt, updatedAt
+
+/userTenants/{uid}/memberships/{tenantId}
+  - tenantId, role ("owner"|"member"), privileges snapshot (optional)
+  - createdAt (derived), updatedAt
 
 /audit_logs/{logId}
   - operation (CREATE|UPDATE|DELETE), collection, documentId, tenantId
@@ -303,7 +312,7 @@ FinDogAI prioritizes a **voice-first, eyes-free interaction model** optimized fo
 **Security & Compliance:**
 - **Firebase Region:** europe-west1 (Belgium) for Firestore, Storage, Functions—GDPR/DSGVO compliance
 - **Authentication:** Firebase Auth email/password for MVP; add OAuth (Google) post-MVP
-- **Data Isolation:** Firestore Security Rules enforce `request.auth.token.tenant_id == tenantId` for all reads/writes
+- **Data Isolation:** Firestore Security Rules enforce membership-based authorization: access to `/tenants/{tenantId}/**` requires membership at `/tenants/{tenantId}/members/{request.auth.uid}`; privileges gate reads/writes
 - **GDPR Right-to-Erasure:** Cloud Function implements cascade delete of tenant data including audit logs
 
 **Dependency Management:**
@@ -398,10 +407,10 @@ FinDogAI prioritizes a **voice-first, eyes-free interaction model** optimized fo
 1. Registration screen with fields: email, password, displayName
 2. Form validation: email format, password strength (min 8 chars), required fields
 3. On successful registration, Firebase Auth user created
-4. Custom claim `tenant_id` set to user's UID (user is their own tenant)
-5. Firestore document `/users/{tenantId}/personProfile` created with displayName, email, language (default: cs), aiSupportEnabled: true, createdAt
-6. Firestore document `/users/{tenantId}/businessProfile` created with currency (CZK), vatRate (21%), distanceUnit (km), createdAt
-7. Firestore document `/users/{tenantId}/teamMembers/{tenantMemberId}` auto-created for registering user with teamMemberNumber: 1, authUserId: user.uid, privileges: {canAddCosts: true, canViewFinancials: true}
+4. On success, a new tenant is created at `/tenants/{tenantId}` (server-generated ID) with `createdBy: user.uid`, `createdAt`
+5. Membership document created at `/tenants/{tenantId}/members/{user.uid}` with `{ owner: true, canAddCosts: true, canViewFinancials: true }`
+6. Index document created at `/userTenants/{user.uid}/memberships/{tenantId}` for listing/selecting tenants (read-only; maintained by Cloud Functions)
+7. Initial profile docs created under `/tenants/{tenantId}`: `personProfile` (displayName, email, language: cs, aiSupportEnabled: true, createdAt) and `businessProfile` (currency: CZK, vatRate: 21%, distanceUnit: km, createdAt); create team member resource `teamMembers/{teamMemberId}` for the owner with `teamMemberNumber: 1`, `authUserId: user.uid`, `name: displayName`
 8. Success message displayed: "Welcome, [displayName]! Your account is ready."
 9. User automatically logged in and redirected to home screen
 10. Registration errors handled gracefully (email already exists, weak password, network failure)
@@ -434,15 +443,18 @@ FinDogAI prioritizes a **voice-first, eyes-free interaction model** optimized fo
 **Acceptance Criteria:**
 
 1. Security Rules file `firestore.rules` created
-2. Rule: Users can only access `/users/{tenantId}/**` where `tenantId == request.auth.token.tenant_id`
+2. Rule: Users can access `/tenants/{tenantId}/**` only if a membership exists at `/tenants/{tenantId}/members/{request.auth.uid}`; writes to cost-related entities require `member.canAddCosts == true`; reads of financial fields require `member.canViewFinancials == true`
 3. Rule: Unauthenticated users have no read/write access (except public collections if needed in future)
-4. Rule: Audit logs (`/audit_logs/{logId}`) are write-only from Cloud Functions (client cannot write)
+4. Rule: Audit logs (`/audit_logs/{logId}`) are Cloud Functions–only (client cannot read or write)
 5. Rules deployed to Firebase via `firebase deploy --only firestore:rules`
 6. Manual testing: User A cannot read User B's jobs (returns permission denied)
 7. Manual testing: Unauthenticated request to Firestore returns permission denied
 8. Security Rules validated via Firebase Emulator Suite (unit tests for rules)
 9. Rules include comments explaining tenant isolation logic
 10. Rules version controlled in git repository
+11. Rule: All documents under `/tenants/{tenantId}/**` must include a `tenantId` field equal to the path `tenantId`
+12. Rule: Membership documents (`/tenants/{tenantId}/members/{uid}`) can only be created/updated/deleted by owners; members may only update benign self-fields (e.g., `lastSeenAt`)
+13. Rule: `/userTenants/{uid}/memberships/{tenantId}` is read-only to the client (writes via Cloud Functions only)
 
 ### Story 1.6: Basic Health Check Screen & CI/CD Validation
 
@@ -457,7 +469,7 @@ FinDogAI prioritizes a **voice-first, eyes-free interaction model** optimized fo
 3. Screen shows: Firestore connectivity status (✓ Connected to [region])
 4. Screen shows: Current tenant ID (✓ Tenant: [tenantId])
 5. Screen shows: App version and build timestamp
-6. Health check writes a test document to `/users/{tenantId}/healthCheck` and reads it back
+6. Health check writes a test document to `/tenants/{tenantId}/healthCheck` and reads it back
 7. If write/read succeeds, display "✓ Firestore Read/Write OK"
 8. If offline, display "⚠ Offline Mode - Sync pending"
 9. PWA deployed to Firebase Hosting via `firebase deploy --only hosting`
@@ -465,6 +477,37 @@ FinDogAI prioritizes a **voice-first, eyes-free interaction model** optimized fo
 11. Health check screen functional in deployed PWA
 12. Capacitor Android build generates APK successfully (`npx cap build android`)
 
+### Story 1.7: Tenant Invitations (Owner)
+
+**As a** business owner,
+**I want** to invite team members with specific privileges,
+**so that** they can securely join my tenant and collaborate.
+
+**Acceptance Criteria:**
+
+1. "Invite Member" dialog available from Team Members screen with fields: Email (optional), Privileges: canAddCosts (toggle), canViewFinancials (toggle)
+2. On "Create Invite", an HTTPS callable Cloud Function creates `/tenants/{tenantId}/invites/{inviteId}` with: `codeHash` (hashed server-side), `expiresAt` (TTL ≥72h), `createdBy`, `presetPrivileges`, `status: pending`
+3. Function returns a single-use invite code/link; code itself is not stored in Firestore (only hash)
+4. Invites list shows pending/consumed/expired with basic metadata; owners can revoke (delete) pending invites
+5. Cloud Function protected by App Check and rate limiting
+6. Firebase Emulator tests validate invite creation and listing
+
+### Story 1.8: Invitation Redemption & Membership Linking
+
+**As a** team member,
+**I want** to redeem an invitation code/link and join the correct tenant,
+**so that** I can access and write data for that business.
+
+**Acceptance Criteria:**
+
+1. Onboarding flow supports "Join a team" with invite code/link input
+2. HTTPS callable `redeemInvite(code)` validates `codeHash`, TTL, single-use, and optional email binding; on success it:
+   - Creates membership at `/tenants/{tenantId}/members/{uid}` with the preset privileges
+   - Creates index at `/userTenants/{uid}/memberships/{tenantId}` (read-only; maintained by Functions)
+   - Creates team member resource at `/tenants/{tenantId}/teamMembers/{teamMemberId}` with `teamMemberNumber` and `authUserId: uid`
+3. On success, app switches to the joined tenant and displays confirmation
+4. If invalid/expired/already-used, show appropriate error and retry option; do not leak tenant existence
+5. Emulator tests validate end-to-end redemption and Security Rules for membership-gated access
 ## Epic 2: Core Data Management & Business Setup
 
 **Expanded Goal:** Implement the foundational data entities (Jobs, Vehicles, Machines, Team Members) with full CRUD operations, sequential ID generation via Firestore counters, and enable users to configure Business and Person Profiles. This epic establishes the business context that voice flows will reference, delivering a functional job management system before voice features are added.
@@ -540,13 +583,13 @@ FinDogAI prioritizes a **voice-first, eyes-free interaction model** optimized fo
 
 1. Resources Management screen has "Team Members" tab
 2. Team members list displays: `[teamMemberNumber] Name - Rate: X CZK/hour` with privilege badges (💰 Can Add Costs, 👁️ Can View Financials)
-3. Registering user auto-created as team member #1 with full privileges (from Story 1.3) - this is the business owner
-4. "Add Team Member" button navigates to team member form
-5. Form fields: name (required), hourlyRate (required), email (optional for future auth), privileges: canAddCosts (toggle), canViewFinancials (toggle)
-6. On save (online), `teamMemberNumber` is allocated by HTTPS callable (transactional) and returned to the client; offline, the number is assigned on sync by an onCreate trigger
-7. Team member saved to `/users/{tenantId}/teamMembers/{teamMemberId}` with: teamMemberNumber, name, hourlyRate, privileges, authUserId (null for MVP), createdAt, createdBy
-8. Edit team member updates: name, hourlyRate, privileges, updatedAt, updatedBy (teamMemberNumber #1 cannot modify privileges - toggles disabled)
-9. Delete team member removes from Firestore immediately without reference checking (costs/events contain full team member copies)
+3. Registering user auto-created as team member #1 (resource) and as an owner membership (from Story 1.3) — this is the business owner
+4. "Add Team Member" opens an "Invite Member" dialog
+5. Invite form fields: email (optional), privilege toggles: canAddCosts (toggle), canViewFinancials (toggle); after the invite is redeemed, the owner can set name/hourlyRate on the team member resource
+6. On "Create Invite", a Cloud Function creates `/tenants/{tenantId}/invites/{inviteId}` and returns a single-use code/link (TTL; single-use)
+7. Upon invite redemption, membership is created at `/tenants/{tenantId}/members/{uid}` with selected privileges; a team member resource is created at `/tenants/{tenantId}/teamMembers/{teamMemberId}` with `teamMemberNumber` and `authUserId: uid`
+8. Edit team member updates: name, hourlyRate, updatedAt, updatedBy (privileges are managed on the membership and editable by owners only; team member #1 cannot change their owner status)
+9. Delete team member removes the resource document; membership removal is a separate owner-only action (not implied by resource deletion)
 10. **Owner protection:** Team member #1 cannot be deleted - delete button hidden/disabled with tooltip: "Business owner (Member #1) cannot be deleted"
 11. Non-owner team member deletion shows confirmation: "Delete [teamMemberNumber] Name? This cannot be undone."
 12. Empty state: "No team members yet" should never occur (owner is always present as #1)
