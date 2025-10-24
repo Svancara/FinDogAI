@@ -7,11 +7,12 @@
 - Enable solo mobile craftsmen to capture 100% of job costs in real-time through hands-free voice interaction
 - Reduce daily administrative overhead from 30-60 minutes to under 15 minutes
 - Provide offline-first cost tracking that works reliably without network connectivity
-- Eliminate revenue leakage from forgotten expenses (currently 5-15% of billable costs)
+- Reduce revenue leakage from forgotten expenses by ≥5% in pilot (baseline 5–15%), measured via capture completeness and near-real-time entry metrics; full elimination requires invoicing/billing integration (Phase 2)
 - Deliver production-ready MVP with core voice flows (Set Active Job, Start Journey) plus high-frequency capture commands (End Journey, Add Material Cost, Record Work Hours, Quick Expense) within 6 months
-- MVP scope for 6 months (1–2 devs): Epics 1–4 + essential slices of Epics 5 and 6 only (5.1 audit triggers, 5.5 Security Rules; 6.2 offline sync status, 6.3 conflict resolution, 6.6 final QA). Defer advanced privileges, OAuth, detailed PDF refinements (Issue #11), and deep UI polish to Phase 2.
+- MVP scope for 6 months (1–2 devs): Epics 1–4 + essential slices of Epics 5 and 6 only (5.1 audit triggers, 5.5 Security Rules; 6.2 offline sync status, 6.3 conflict resolution, 6.6 final QA). Defer advanced privileges, OAuth, PDF generation (Issue #11), and deep UI polish to Phase 2.
 
 - Achieve 70%+ weekly retention and 80%+ voice flow success rate among beta users
+- Validation of leakage reduction (MVP): Track proxy KPIs (capture completeness: % of costs captured same day; journey→transport cost pairing rate; % of days with zero end-of-day backlog). Compare pre/pilot baseline vs 4-week pilot. Invoicing/billing impact deferred to Phase 2.
 - Establish baseline Czech voice accuracy using domain test sets: STT WER ≤15% (median) and ≤25% (P95) in controlled conditions; intent F1 ≥0.85 for core flows; English supported as secondary
 
 ### Background Context
@@ -57,7 +58,7 @@ FinDogAI combines voice-first interaction, offline-first Firebase/Firestore arch
 
 **FR13:** The system shall enable Firestore offline persistence, ensuring all manual flows function without network connectivity, with automatic background sync and visible sync status indicators. Production voice flows require network connectivity; when offline, voice interactions are disabled and the app shall work fully via manual flows; no audio is recorded or queued.
 
-**FR14:** The system shall generate basic PDF reports for jobs showing: job title, cost breakdown by category, sum of advances, net balance, with email option via device's default mail client.
+**FR14 (Phase 2):** The system shall generate basic PDF reports for jobs showing: job title, cost breakdown by category, sum of advances, net balance, with email option via device's default mail client. This functionality is out of scope for MVP and will be delivered in Phase 2.
 
 **FR15:** The system shall support Czech and English UI localization and voice recognition, with user-selectable language preference (Czech default).
 
@@ -133,7 +134,7 @@ FinDogAI prioritizes a **voice-first, eyes-free interaction model** optimized fo
 
 2. **Jobs List:** Scrollable job cards showing `[jobNumber] Title - Status` with financial summary (costs vs budget). Sorted by status first, then by jobNumber ascending. Tap to view details, long-press for quick "Set Active" action.
 
-3. **Job Detail View:** Tabbed interface: Costs (breakdown by category with sequential IDs), Advances (ordinalNumber + amount), Events timeline, PDF export action.
+3. **Job Detail View:** Tabbed interface: Costs (breakdown by category with sequential IDs), Advances (ordinalNumber + amount), Events timeline, PDF export action (Phase 2).
 
 4. **Cost Entry Form (Manual Fallback):** Category-specific forms (Transport/Material/Labor/Machine/Other) with large number pads, vehicle/machine picker, voice dictation for descriptions. Pre-filled with active job context.
 
@@ -223,7 +224,7 @@ FinDogAI prioritizes a **voice-first, eyes-free interaction model** optimized fo
 
 2. **Serverless Backend (Cloud Functions):**
    - **onCreate/onUpdate/onDelete triggers:** Audit logging to `audit_logs` collection
-   - **HTTPS callable:** PDF generation (pdfmake library)
+   - **HTTPS callable:** PDF generation (pdfmake library) — Phase 2
    - **HTTPS callable:** allocateSequence (transactional) — allocates next number for tenant-level sequences (jobNumber, vehicleNumber, machineNumber, teamMemberNumber) and per-job sequence (ordinalNumber)
    - **onCreate assignment triggers:** when an entity is created without its sequence field (offline create), assign the next number atomically and write it back to the document
    - **Scheduled function:** Audit log TTL cleanup (runs daily, deletes entries >1 year old)
@@ -252,7 +253,7 @@ FinDogAI prioritizes a **voice-first, eyes-free interaction model** optimized fo
    - Target: Core flows (Set Active Job, Start Journey, End Journey, Add Material Cost, Record Work Hours, Quick Expense) covered
 
 3. **E2E Tests (Selective):**
-   - Critical user journeys: Onboarding → Create Job → Voice Command → PDF Export
+   - Critical user journeys: Onboarding → Create Job → Voice Command → PDF Export (Phase 2)
    - Tools: **Playwright** (web and mobile), **MCP Browser tools** for debugging and interactive testing
    - **NOT Cypress** (explicitly excluded)
    - Target: 5-7 happy path scenarios
@@ -364,7 +365,7 @@ FinDogAI prioritizes a **voice-first, eyes-free interaction model** optimized fo
 **Goal:** Implement Cloud Functions audit triggers, basic team member privilege system, and compliance features (GDPR data deletion, audit log TTL cleanup).
 
 ### **Epic 6: Reporting, Export & MVP Polish**
-**Goal:** Add PDF generation, job financial summaries, offline sync status visibility, and final UX polish to deliver production-ready MVP.
+**Goal:** Add job financial summaries, offline sync status visibility, and final UX polish to deliver production-ready MVP; PDF generation is deferred to Phase 2.
 
 ## Epic 1: Foundation & Authentication Infrastructure
 
@@ -1227,9 +1228,9 @@ Select 1-9 or just type your question/feedback:
 
 ## Epic 6: Reporting, Export & MVP Polish
 
-**Expanded Goal:** Implement PDF report generation for jobs via Cloud Function, add offline sync status visibility with queue indicators, enhance UI polish (loading states, error messages, empty states), and deliver final QA pass for production readiness. This epic transforms the functional MVP into a polished, production-ready application.
+**Expanded Goal:** Implement (Phase 2) PDF report generation for jobs via Cloud Function, add offline sync status visibility with queue indicators, enhance UI polish (loading states, error messages, empty states), and deliver final QA pass for production readiness. This epic transforms the functional MVP into a polished, production-ready application.
 
-### Story 6.1: PDF Report Generation Cloud Function
+### Story 6.1: PDF Report Generation Cloud Function (Phase 2)
 
 **As a** craftsman,
 **I want** to export job reports as PDF with costs breakdown and financial summary,
@@ -1378,7 +1379,7 @@ Select 1-9 or just type your question/feedback:
 14. **Load Testing (Basic):** 10 concurrent users creating jobs/costs → no errors, acceptable latency (<2s for writes)
 15. **Production Deployment:** Deploy to Firebase Hosting + Functions, accessible at production URL, all env variables configured
 16. **Conflict Resolution Testing:** Validate Story 6.3 scenarios: concurrent edits (LWW), delete-vs-update conflicts (Sync Issues UI), offline sequential ID allocation (no duplicates), partial sync failures (retry mechanism)
-17. **Post-Deployment Smoke Test:** Register new user → create job → add cost via voice → export PDF → all steps succeed
+17. **Post-Deployment Smoke Test:** Register new user → create job → add cost via voice → export PDF (Phase 2) → all steps succeed
 18. **Rollback Plan:** Document rollback procedure if critical bugs found post-launch
 
 ---
@@ -1398,7 +1399,7 @@ Select 1-9 or just type your question/feedback:
 - Compliance features (audit logs, GDPR-ready) are table stakes for EU market
 
 **Epic 6 (Polish & Production Readiness):**
-- PDF export is minimum viable billing artifact (replaces complex invoicing for MVP)
+- PDF export (Phase 2) is minimum viable billing artifact (replaces complex invoicing post-MVP)
 - Offline sync visibility addresses user anxiety ("Is my data saved?")
 - UI polish transforms functional MVP into production-quality app
 - QA checklist ensures confident launch (no critical bugs slip through)
@@ -1412,7 +1413,7 @@ Select 1-9 or just type your question/feedback:
 
 **Phasing & MVP Scope (6 months, 1–2 devs):** MVP includes Epics 1–4 plus essential slices of Epics 5 and 6 (5.1 audit triggers, 5.5 Security Rules; 6.2 offline sync status, 6.3 conflict resolution, 6.6 final QA).
 
-Phase 2 includes: advanced privileges (#12 expansion), OAuth (beyond email/password), detailed PDF requirement refinements (Issue #11), deeper UI polish, approval workflows for large expenses, and job-specific/time-bound permissions.
+Phase 2 includes: advanced privileges (#12 expansion), OAuth (beyond email/password), PDF generation (Issue #11), invoicing/billing integration, deeper UI polish, approval workflows for large expenses, and job-specific/time-bound permissions.
 
 **Next steps:**
 1. Execute PM Checklist
