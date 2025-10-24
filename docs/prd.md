@@ -65,6 +65,9 @@ FinDogAI combines voice-first interaction, offline-first Firebase/Firestore arch
 
 **FR18:** The system shall assign sequential, voice-friendly numbers via Cloud Functions using transactional allocation (not client-side counters): jobNumber, teamMemberNumber, vehicleNumber, machineNumber per tenant; ordinalNumber per job (costs/advances/events). Online: allocate via HTTPS callable; Offline: assigned on sync by onCreate triggers. Gaps acceptable; duplicates prohibited.
 
+**FR19:** The system shall implement an offline sync conflict resolution policy. All mutable documents include `createdAt`, `createdBy`, `updatedAt` (serverTimestamp), and `updatedBy`. Conflicts are resolved via last-write-wins (LWW) at the document level; sequential numbers are allocated server-side to prevent ID conflicts; jobs use soft delete (`status: archived`) instead of destructive delete. Updates to deleted documents and other sync errors are surfaced in a "Sync Issues" UI with options to Discard, Retry, or Recreate as new. Audit logs provide traceability for manual review and recovery.
+
+
 ### Non-Functional Requirements
 
 **NFR1:** Voice pipeline latency (post-wake-word to first STT token) shall achieve ≤3.0 seconds (median) and ≤5.0 seconds (P95) on mid-range Android devices under typical 4G conditions.
@@ -527,7 +530,7 @@ FinDogAI prioritizes a **voice-first, eyes-free interaction model** optimized fo
 3. "Create Job" button navigates to job creation form
 4. Job creation form fields: title (required), description, budget (optional), currency (default from businessProfile), vatRate (default from businessProfile)
 5. On save (online), `jobNumber` is allocated by HTTPS callable (transactional) and returned to the client; offline, show placeholder '—' and the number is assigned on sync by an onCreate trigger
-6. New job saved to `/users/{tenantId}/jobs/{jobId}` with: jobNumber, title, description, status: "active", currency, vatRate, budget, createdAt, createdBy (current team member ID)
+6. New job saved to `/tenants/{tenantId}/jobs/{jobId}` with: jobNumber, title, description, status: "active", currency, vatRate, budget, createdAt, createdBy (current team member ID)
 7. Job detail screen displays all job fields with Edit and Archive buttons
 8. Edit job updates: title, description, budget, currency, vatRate, updatedAt, updatedBy
 9. Archive job changes status to "archived" (soft delete, not physically removed)
@@ -548,7 +551,7 @@ FinDogAI prioritizes a **voice-first, eyes-free interaction model** optimized fo
 4. Vehicle form reads distanceUnit from businessProfile and displays single rate field labeled "Rate per [Km/Mile]" accordingly
 5. Vehicle form fields: name (required, e.g., "Transporter", "Škoda Octavia"), rate (required, labeled based on distanceUnit)
 6. On save (online), `vehicleNumber` is allocated by HTTPS callable (transactional) and returned to the client; offline, the number is assigned on sync by an onCreate trigger
-7. Vehicle saved to `/users/{tenantId}/vehicles/{vehicleId}` with: vehicleNumber, name, distanceUnit (copied from businessProfile), ratePerDistanceUnit, createdAt, createdBy
+7. Vehicle saved to `/tenants/{tenantId}/vehicles/{vehicleId}` with: vehicleNumber, name, distanceUnit (copied from businessProfile), ratePerDistanceUnit, createdAt, createdBy
 8. Edit vehicle updates: name, rate, updatedAt, updatedBy (distanceUnit remains immutable from creation time)
 9. Delete vehicle removes from Firestore immediately without reference checking (costs/events contain full vehicle copies)
 10. Empty state: "No vehicles yet. Add your first vehicle to track journey costs."
@@ -567,7 +570,7 @@ FinDogAI prioritizes a **voice-first, eyes-free interaction model** optimized fo
 3. "Add Machine" button navigates to machine creation form
 4. Machine form fields: name (required, e.g., "Excavator", "Drill"), hourlyRate (required)
 5. On save (online), `machineNumber` is allocated by HTTPS callable (transactional) and returned to the client; offline, the number is assigned on sync by an onCreate trigger
-6. Machine saved to `/users/{tenantId}/machines/{machineId}` with: machineNumber, name, hourlyRate, createdAt, createdBy
+6. Machine saved to `/tenants/{tenantId}/machines/{machineId}` with: machineNumber, name, hourlyRate, createdAt, createdBy
 7. Edit machine updates: name, hourlyRate, updatedAt, updatedBy
 8. Delete machine removes from Firestore immediately without reference checking (costs/events contain full machine copies)
 9. Empty state: "No machines yet. Add equipment to track machine labor costs."
@@ -604,7 +607,7 @@ FinDogAI prioritizes a **voice-first, eyes-free interaction model** optimized fo
 
 1. Settings screen has "Business Profile" section
 2. Fields displayed: Currency (dropdown: CZK, EUR, USD with ISO 4217 codes), VAT Rate (percentage, default 21%), Distance Unit (radio: Kilometers / Miles)
-3. On first access, fields pre-filled from `/users/{tenantId}/businessProfile` (created in Story 1.3)
+3. On first access, fields pre-filled from `/tenants/{tenantId}/businessProfile` (created in Story 1.3)
 4. Save button updates businessProfile document with: currency, vatRate, distanceUnit, updatedAt
 5. Success message: "Business profile updated"
 6. New jobs created after update use new defaults
@@ -623,7 +626,7 @@ FinDogAI prioritizes a **voice-first, eyes-free interaction model** optimized fo
 
 1. Settings screen has "Person Profile" section
 2. Fields displayed: Display Name (text), Email (read-only, from Firebase Auth), Language (dropdown: Czech / English), AI Support (toggle: On/Off; default On)
-3. On first access, fields pre-filled from `/users/{tenantId}/personProfile` (created in Story 1.3)
+3. On first access, fields pre-filled from `/tenants/{tenantId}/personProfile` (created in Story 1.3)
 4. Language change immediately saves to Firestore (`personProfile.language`) before UI update to ensure persistence
 5. After save completes, language change immediately updates current screen (Person Profile) UI text (Czech ↔ English using Angular i18n)
 6. Language preference applied to all subsequent screens and app restarts
@@ -877,7 +880,7 @@ Select 1-9 or just type your question/feedback:
 2. STT transcribes → LLM parses → Vehicle queried → TTS confirms
 3. Voice Confirmation Modal displays: "✓ Journey to **Brno** | Vehicle: **[1] Transporter** | Odometer: **12,345 km**"
 4. TTS plays: "Starting journey to Brno in Transporter, odometer one two three four five"
-5. User taps Accept → Journey event created in `/users/{tenantId}/jobs/{activeJobId}/events/{eventId}`
+5. User taps Accept → Journey event created in `/tenants/{tenantId}/jobs/{activeJobId}/events/{eventId}`
 6. Event document: ordinalNumber (sequence), type: "journey_start", timestamp (now), data: {destination, vehicle: {full vehicle object copy}, odometerStart: 12345, odometerEnd: null, calculatedDistance: null, calculatedCost: null}, createdAt, createdBy (current team member ID)
 7. Success message (toast): "Journey to Brno started" (in user's language)
 8. Journey event displayed in Job Detail → Events timeline: "[ordinalNumber] Journey to Brno - Transporter - 12,345 km"
@@ -899,7 +902,7 @@ Select 1-9 or just type your question/feedback:
 3. Form fields: Vehicle (dropdown showing `[vehicleNumber] Name`), **Input Mode toggle (Distance / Manual Amount)**, Description (optional text), Date/Time (default: now)
 4. **Distance Mode:** Distance in km/miles (number with unit label from businessProfile), Amount auto-calculated (distance × vehicle.ratePerDistanceUnit) displayed read-only
 5. **Manual Amount Mode:** Amount (number with currency), Distance field hidden, Vehicle still required
-6. On save, cost created in `/users/{tenantId}/jobs/{jobId}/costs/{costId}` where jobId is the current job context
+6. On save, cost created in `/tenants/{tenantId}/jobs/{jobId}/costs/{costId}` where jobId is the current job context
 7. Cost document: ordinalNumber (sequence), category: "transport", amount, vehicle: {full vehicle object copy with vehicleNumber, name, distanceUnit, ratePerDistanceUnit}, distance (null if manual amount mode), description, timestamp, createdAt, createdBy
 8. Cost displayed in Job Detail → Costs tab: "[ordinalNumber] Transport - [vehicleNumber] Vehicle Name - X km - Y CZK" (or "- Y CZK" if distance is null)
 9. Edit cost: Tap cost item → opens form pre-filled with original mode (distance/manual), allows updates to distance/amount/description/vehicle, job context remains unchanged
@@ -932,7 +935,7 @@ Select 1-9 or just type your question/feedback:
 13. Machine cost document: ordinalNumber, category: "machine", amount, machine: {full machine object copy}, hours (null if manual amount mode), description, timestamp, createdAt, createdBy
 14. **Other form:** Amount (number with currency), Description (required), Date/Time
 15. Other cost document: ordinalNumber, category: "other", amount, description, timestamp, createdAt, createdBy
-16. All costs saved to `/users/{tenantId}/jobs/{jobId}/costs/{costId}` where jobId is the current job context
+16. All costs saved to `/tenants/{tenantId}/jobs/{jobId}/costs/{costId}` where jobId is the current job context
 17. All categories support Edit (update amount/description/resource, mode preserved from creation, job context remains unchanged) and Delete (with confirmation)
 18. Job Detail → Costs tab displays costs grouped by category with sequential ordinalNumbers and totals per category
 19. Cost display shows calculated details when available: "Transport - 50 km - 250 CZK" vs "Transport - 250 CZK" (manual), "Material - 10 units × 5 CZK - 50 CZK" vs "Material - 50 CZK" (manual)
@@ -950,7 +953,7 @@ Select 1-9 or just type your question/feedback:
 2. Advances tab displays list: "[ordinalNumber] Amount - Date - Note" with total sum at bottom
 3. "Add Advance" button opens advance entry form (job context is implicit - current job from Job Detail screen)
 4. Form fields: Amount (required, number with currency from job), Date (default: today), Note (optional, e.g., "Initial deposit", "Payment #2")
-5. On save, advance created in `/users/{tenantId}/jobs/{jobId}/advances/{advanceId}` where jobId is the current job context
+5. On save, advance created in `/tenants/{tenantId}/jobs/{jobId}/advances/{advanceId}` where jobId is the current job context
 6. Advance document: ordinalNumber (sequence), amount, date, note, createdAt, createdBy
 7. Edit advance: Tap item → opens form pre-filled, allows updates to amount/date/note, updatedAt, updatedBy
 8. Delete advance: Swipe left → confirmation: "Delete advance [ordinalNumber]?" → removes from Firestore
@@ -994,13 +997,13 @@ Select 1-9 or just type your question/feedback:
 
 **Acceptance Criteria:**
 
-1. Cloud Function `onJobCreate` triggers on `/users/{tenantId}/jobs/{jobId}` onCreate
+1. Cloud Function `onJobCreate` triggers on `/tenants/{tenantId}/jobs/{jobId}` onCreate
 2. Function writes to `/audit_logs/{logId}` with: operation: "CREATE", collection: "jobs", documentId: jobId, tenantId, timestamp (server time), authorId (from job.createdBy), after: {full job document}, ttl: (timestamp + 1 year)
-3. Cloud Function `onJobUpdate` triggers on `/users/{tenantId}/jobs/{jobId}` onUpdate
+3. Cloud Function `onJobUpdate` triggers on `/tenants/{tenantId}/jobs/{jobId}` onUpdate
 4. Function writes audit log with: operation: "UPDATE", before: {old job document}, after: {new job document}
-5. Cloud Function `onJobDelete` triggers on `/users/{tenantId}/jobs/{jobId}` onDelete
+5. Cloud Function `onJobDelete` triggers on `/tenants/{tenantId}/jobs/{jobId}` onDelete
 6. Function writes audit log with: operation: "DELETE", before: {deleted job document}, after: null
-7. Same pattern for Cost triggers: `onCostCreate`, `onCostUpdate`, `onCostDelete` on `/users/{tenantId}/jobs/{jobId}/costs/{costId}`
+7. Same pattern for Cost triggers: `onCostCreate`, `onCostUpdate`, `onCostDelete` on `/tenants/{tenantId}/jobs/{jobId}/costs/{costId}`
 8. Audit log documents immutable (Security Rules: write-only from Cloud Functions, no client write access)
 9. Triggers execute asynchronously (<500ms execution time, non-blocking to client operations)
 10. Local emulator testing: Triggers fire when creating/updating/deleting jobs/costs via app
@@ -1015,10 +1018,10 @@ Select 1-9 or just type your question/feedback:
 
 **Acceptance Criteria:**
 
-1. Cloud Functions created for Vehicles: `onVehicleCreate`, `onVehicleUpdate`, `onVehicleDelete` on `/users/{tenantId}/vehicles/{vehicleId}`
-2. Cloud Functions created for Machines: `onMachineCreate`, `onMachineUpdate`, `onMachineDelete` on `/users/{tenantId}/machines/{machineId}`
-3. Cloud Functions created for TeamMembers: `onTeamMemberCreate`, `onTeamMemberUpdate`, `onTeamMemberDelete` on `/users/{tenantId}/teamMembers/{teamMemberId}`
-4. Cloud Functions created for Advances: `onAdvanceCreate`, `onAdvanceUpdate`, `onAdvanceDelete` on `/users/{tenantId}/jobs/{jobId}/advances/{advanceId}`
+1. Cloud Functions created for Vehicles: `onVehicleCreate`, `onVehicleUpdate`, `onVehicleDelete` on `/tenants/{tenantId}/vehicles/{vehicleId}`
+2. Cloud Functions created for Machines: `onMachineCreate`, `onMachineUpdate`, `onMachineDelete` on `/tenants/{tenantId}/machines/{machineId}`
+3. Cloud Functions created for TeamMembers: `onTeamMemberCreate`, `onTeamMemberUpdate`, `onTeamMemberDelete` on `/tenants/{tenantId}/teamMembers/{teamMemberId}`
+4. Cloud Functions created for Advances: `onAdvanceCreate`, `onAdvanceUpdate`, `onAdvanceDelete` on `/tenants/{tenantId}/jobs/{jobId}/advances/{advanceId}`
 5. All triggers follow same pattern as Story 5.1: operation, collection, documentId, tenantId, timestamp, authorId, before/after, ttl
 6. Subcollections (costs, advances, events) include parent context in audit log: jobId field for traceability
 7. Triggers deployed and tested in emulator: Create/update/delete vehicle → audit log entry created
@@ -1053,7 +1056,7 @@ Select 1-9 or just type your question/feedback:
 
 **Acceptance Criteria:**
 
-1. On app init, load current user's team member record from `/users/{tenantId}/teamMembers` where `authUserId == currentUser.uid`
+1. On app init, load membership at `/tenants/{tenantId}/members/{currentUser.uid}` (privileges), and load the team member resource from `/tenants/{tenantId}/teamMembers` where `authUserId == currentUser.uid` for display
 2. Store privileges (`canAddCosts`, `canViewFinancials`) in app state (NgRx/Signals) for reactive UI updates
 3. **canAddCosts = false:** Hide/disable "Add Cost" button, "Add Advance" button, voice microphone button (costs-related commands)
 4. **canAddCosts = false:** Cost/Advance edit/delete buttons hidden in lists
@@ -1074,11 +1077,11 @@ Select 1-9 or just type your question/feedback:
 
 **Acceptance Criteria:**
 
-1. Security Rules updated to load team member document for request.auth user
-2. Rule helper function: `function getTeamMember() { return get(/databases/$(database)/documents/users/$(request.auth.token.tenant_id)/teamMembers/$(request.auth.uid)).data }`
-3. **Write access to costs/advances:** `allow create, update, delete: if getTeamMember().privileges.canAddCosts == true`
-4. **Read access to financial fields:** Costs/advances readable only if `getTeamMember().privileges.canViewFinancials == true` OR operations are non-financial (descriptions/dates)
-5. **Team member #1 bypass:** `allow read, write: if getTeamMember().teamMemberNumber == 1` (owner always has access)
+1. Security Rules updated to load membership document for the request.auth user
+2. Rule helper: `function member(t) { return get(/databases/$(database)/documents/tenants/$(t)/members/$(request.auth.uid)).data }`
+3. **Write access to costs/advances:** `allow create, update, delete: if member(t).canAddCosts == true`
+4. **Read access to financial fields:** Costs/advances readable only if `member(t).canViewFinancials == true` OR operations are non-financial (descriptions/dates)
+5. **Owner bypass:** `allow read, write: if member(t).owner == true` (owner always has access)
 6. **Job budget field protection:** Job writes that change `budget` field require `canViewFinancials == true`
 7. Security Rules tested via emulator with multiple test users (owner, restricted user, no-privilege user)
 8. Test: User with `canAddCosts: false` attempting to create cost → permission denied
@@ -1141,11 +1144,36 @@ Select 1-9 or just type your question/feedback:
 10. Testing: Enable airplane mode, create job/cost, re-enable network → verify sync completes and status updates
 11. Sync status uses minimal battery: Checks connectivity passively (network status events, not polling)
 12. Empty state: If online with no pending writes, just show "🟢 Online" (no clutter)
-
 13. Header shows AI status badge aligned with connectivity: when online and AI disabled → "🟢 Online · AI Disabled"; when offline and AI enabled → "🟠 Offline · AI Unavailable"
 14. AI status badge appears in the same area as connectivity (top status bar or within Active Job Banner), coalescing into a single line without overlapping UI
 15. Tapping the AI status badge opens a tooltip explaining current state and next actions: if disabled → "Enable AI in Settings › Person Profile"; if offline → "Reconnect to enable AI features"
-### Story 6.3: UI Polish - Loading States & Skeleton Screens
+
+
+
+### Story 6.3: Offline Sync Conflict Resolution (MVP)
+
+**As a** user,
+**I want** my offline edits to sync safely even when others changed the same data,
+**so that** I don't lose work and can resolve conflicts when they happen.
+
+**Acceptance Criteria:**
+
+1. All mutable entities (jobs, vehicles, machines, teamMembers, costs, advances, events) include `createdAt`, `createdBy`, `updatedAt` (serverTimestamp), `updatedBy`
+2. Conflict policy: Last-Write-Wins (LWW) at document level; Firestore's built-in conflict resolution applies (later serverTimestamp wins); no auto-merge at field level for MVP
+3. Delete vs Update conflict: Jobs use soft delete (`status: archived`) to avoid destructive deletes; for other entities (vehicles, machines, teamMembers, costs, advances, events), if a server-side delete precedes an offline update, the update fails on sync and appears in Sync Issues UI with actions: Discard, Recreate as new
+4. Sequential numbers never conflict: Numbers assigned only by Cloud Functions (allocateSequence HTTPS callable for online; onCreate triggers for offline); offline-created items show placeholder '—' until sync assigns number; no duplicates possible
+5. Sync Issues UI (extends Story 6.2 sync status): Lists failed writes with human-readable reason (e.g., "Document deleted on server", "Permission denied", "Network timeout"); actions per item: Discard (delete local pending write), Retry (re-attempt sync), Recreate (save as new document when applicable)
+6. Visual feedback: When LWW overwrites a local change after sync, the final state is displayed without crash; user can review change history via audit logs for that document (audit logs include before/after snapshots)
+7. Partial sync failures: If some documents succeed and others fail during a batch sync, successful writes are committed; failed writes remain in pending queue and appear in Sync Issues UI; user can retry failed items individually or in batch
+8. Emulator tests:
+   - Two devices edit the same job title offline; both reconnect; the later serverTimestamp write wins; app remains stable on both devices; audit logs show both updates
+   - Device A deletes a cost (hard delete); Device B edits it offline; on sync, B sees a Sync Issue: "Document deleted on server" with options to Discard or Recreate as new cost
+   - Offline create with placeholder number receives a proper sequential number on sync with no duplicates; UI updates from '—' to assigned number
+   - Create 10 jobs offline, sync with 3 failures (e.g., permission denied); verify 7 succeed, 3 appear in Sync Issues with Retry option
+9. No data loss: Pending writes persist across app restarts; sync queue is durable (Firestore offline persistence handles this)
+10. Owner override: If a non-owner user's offline write fails due to privilege changes (e.g., canAddCosts revoked while offline), Sync Issues shows "Permission denied" with explanation; user can contact owner to restore privileges or discard the change
+
+### Story 6.4: UI Polish - Loading States & Skeleton Screens
 
 **As a** user,
 **I want** smooth loading experiences with skeleton screens instead of spinners,
@@ -1166,7 +1194,7 @@ Select 1-9 or just type your question/feedback:
 11. No jarring layout shifts (Content Layout Shift - CLS score <0.1 in Lighthouse)
 12. Loading states respect accessibility: Screen readers announce "Loading jobs" / "Jobs loaded"
 
-### Story 6.4: Error Handling & User Feedback Polish
+### Story 6.5: Error Handling & User Feedback Polish
 
 **As a** user,
 **I want** clear, actionable error messages when things go wrong,
@@ -1187,7 +1215,7 @@ Select 1-9 or just type your question/feedback:
 11. Retry mechanisms: Network-related errors include "Retry" button that re-attempts operation
 12. User-tested: Run app with intentional errors (delete non-existent job, exceed API quota via mocking) to validate messages are clear
 
-### Story 6.5: Final QA Pass & Production Readiness Checklist
+### Story 6.6: Final QA Pass & Production Readiness Checklist
 
 **As a** PM,
 **I want** a comprehensive QA validation of all MVP features,
@@ -1210,8 +1238,9 @@ Select 1-9 or just type your question/feedback:
 13. **Browser Compatibility:** Tested on Chrome, Edge, Safari (iOS + desktop) - all features work
 14. **Load Testing (Basic):** 10 concurrent users creating jobs/costs → no errors, acceptable latency (<2s for writes)
 15. **Production Deployment:** Deploy to Firebase Hosting + Functions, accessible at production URL, all env variables configured
-16. **Post-Deployment Smoke Test:** Register new user → create job → add cost via voice → export PDF → all steps succeed
-17. **Rollback Plan:** Document rollback procedure if critical bugs found post-launch
+16. **Conflict Resolution Testing:** Validate Story 6.3 scenarios: concurrent edits (LWW), delete-vs-update conflicts (Sync Issues UI), offline sequential ID allocation (no duplicates), partial sync failures (retry mechanism)
+17. **Post-Deployment Smoke Test:** Register new user → create job → add cost via voice → export PDF → all steps succeed
+18. **Rollback Plan:** Document rollback procedure if critical bugs found post-launch
 
 ---
 
