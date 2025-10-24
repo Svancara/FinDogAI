@@ -10,7 +10,7 @@
 - Eliminate revenue leakage from forgotten expenses (currently 5-15% of billable costs)
 - Deliver production-ready MVP with core voice flows (Set Active Job + Start Journey) within 6 months
 - Achieve 70%+ weekly retention and 80%+ voice flow success rate among beta users
-- Validate Czech language voice accuracy >90% with English as second language support
+- Establish baseline Czech voice accuracy using domain test sets: STT WER ≤15% (median) and ≤25% (P95) in controlled conditions; intent F1 ≥0.85 for core flows; English supported as secondary
 
 ### Background Context
 
@@ -75,9 +75,9 @@ FinDogAI combines voice-first interaction, offline-first Firebase/Firestore arch
 
 **NFR4:** Firestore sync on reconnection shall commit queued writes within 10 seconds (median).
 
-**NFR5:** Speech-to-Text accuracy shall maintain <5% error rate for short utterances in low-noise conditions.
+**NFR5:** Speech-to-Text quality (cs-CZ) shall achieve Word Error Rate ≤15% (median) and ≤25% (P95) on a 100+ phrase domain test set in controlled conditions; track numeric terms (digits, amounts) with ≥90% exact-match accuracy in controlled conditions.
 
-**NFR6:** Intent classification accuracy shall exceed 90% for core flows (StartJourney, SetActiveJob, AddMaterial).
+**NFR6:** Intent recognition (core flows) shall achieve F1 ≥0.85 on a curated domain test set; numeric entity extraction (jobNumber, odometer) exact-match accuracy ≥90% in controlled conditions; report metrics separately for moderate noise.
 
 **NFR7:** The system shall support iOS 15+ (Safari, native WebView) and Android 10+ (Chrome, native WebView).
 
@@ -666,6 +666,8 @@ FinDogAI prioritizes a **voice-first, eyes-free interaction model** optimized fo
 11. Empty transcription (silence detected) shows: "No speech detected. Please try again."
 12. Transcription text passed to Intent Recognition service (Story 3.4)
 
+13. STT quality evaluated on curated domain test set (≥100 phrases per language) → report WER (median, P95) for cs-CZ and en-US
+14. Numeric transcription accuracy: digits/amounts exact-match ≥90% in controlled conditions; log misrecognitions with ground truth for analysis
 ### Story 3.4: Intent Recognition & Slot Filling with LLM
 
 **As a** developer,
@@ -684,8 +686,10 @@ FinDogAI prioritizes a **voice-first, eyes-free interaction model** optimized fo
 8. If no job matches, return error: "Job not found. Please say job number or title."
 9. Intent recognition latency target: <1 second for LLM response
 10. Mock mode returns hardcoded intent: `{intent: "SetActiveJob", entities: {jobIdentifier: "123"}}`
-11. Unrecognized intent returns: "I didn't understand. Try: 'Set active job to [number or name]'"
-12. Parsed intent and matched job data passed to Confirmation Loop (Story 3.5)
+13. Intent quality evaluated on curated domain test set → report precision, recall, and F1 per intent; F1 ≥0.85 for SetActiveJob and StartJourney
+14. Numeric entity extraction (jobNumber, odometer) exact-match ≥90% in controlled conditions; log confusion cases for analysis
+15. Unrecognized intent returns: "I didn't understand. Try: 'Set active job to [number or name]'"
+16. Parsed intent and matched job data passed to Confirmation Loop (Story 3.5)
 
 ### Story 3.5: Text-to-Speech Confirmation Loop
 
@@ -1147,7 +1151,7 @@ Select 1-9 or just type your question/feedback:
 **Acceptance Criteria:**
 
 1. **Functional Testing:** All user stories from Epics 1-6 manually tested and passing
-2. **Voice Flows:** Both voice flows (Set Active Job, Start Journey) tested with 20+ variations (different phrasings, Czech + English, numeric/text identifiers) - >90% success rate
+2. **Voice Flows:** Both voice flows (Set Active Job, Start Journey) tested with 20+ variations (different phrasings, Czech + English, numeric/text identifiers) — baseline end-to-end success ≥80% in controlled conditions; report WER (median/P95), intent F1, and numeric exact-match; improvements tracked post-MVP
 3. **Offline Testing:** Airplane mode scenarios validated: Create job/cost offline → sync on reconnection → verify data on second device
 4. **Multi-Device Sync:** Same tenant logged in on phone + tablet → changes on one device appear on other within 10 seconds
 5. **Privilege Enforcement:** Test user with restricted privileges cannot access financial data or add costs (UI + API)

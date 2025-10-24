@@ -2,7 +2,7 @@
 
 ## Critical Blocking Issues
 
-### 1. **Voice Pipeline Performance Claims Are Unrealistic**
+/Done/ ### 1. **Voice Pipeline Performance Claims Are Unrealistic**
 
 **Issue:** NFR1 claims "<1.5s post-wake-word to first STT token" on mid-range Android devices, but this ignores fundamental constraints:
 
@@ -13,7 +13,7 @@
 
 **Reality Check:** Achievable target is 3-5 seconds, not 1.5 seconds.
 
-### 2. **Offline Voice Pipeline Is Technically Impossible As Specified**
+/Done/ ### 2. **Offline Voice Pipeline Is Technically Impossible As Specified**
 
 **Issue:** FR13 + FR16-17 claim "all voice flows function without network connectivity" but the architecture depends on cloud STT/LLM/TTS services.
 
