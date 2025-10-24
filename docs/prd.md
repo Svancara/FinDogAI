@@ -9,6 +9,8 @@
 - Provide offline-first cost tracking that works reliably without network connectivity
 - Eliminate revenue leakage from forgotten expenses (currently 5-15% of billable costs)
 - Deliver production-ready MVP with core voice flows (Set Active Job, Start Journey) plus high-frequency capture commands (End Journey, Add Material Cost, Record Work Hours, Quick Expense) within 6 months
+- MVP scope for 6 months (1–2 devs): Epics 1–4 + essential slices of Epics 5 and 6 only (5.1 audit triggers, 5.5 Security Rules; 6.2 offline sync status, 6.3 conflict resolution, 6.6 final QA). Defer advanced privileges, OAuth, detailed PDF refinements (Issue #11), and deep UI polish to Phase 2.
+
 - Achieve 70%+ weekly retention and 80%+ voice flow success rate among beta users
 - Establish baseline Czech voice accuracy using domain test sets: STT WER ≤15% (median) and ≤25% (P95) in controlled conditions; intent F1 ≥0.85 for core flows; English supported as secondary
 
@@ -1408,7 +1410,9 @@ Select 1-9 or just type your question/feedback:
 
 ---
 
-**Epics 4, 5, and 6 complete!** The PRD now contains the full MVP story breakdown with 30+ user stories spanning foundation → data → voice → costs → compliance → polish.
+**Phasing & MVP Scope (6 months, 1–2 devs):** MVP includes Epics 1–4 plus essential slices of Epics 5 and 6 (5.1 audit triggers, 5.5 Security Rules; 6.2 offline sync status, 6.3 conflict resolution, 6.6 final QA).
+
+Phase 2 includes: advanced privileges (#12 expansion), OAuth (beyond email/password), detailed PDF requirement refinements (Issue #11), deeper UI polish, approval workflows for large expenses, and job-specific/time-bound permissions.
 
 **Next steps:**
 1. Execute PM Checklist
