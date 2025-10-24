@@ -29,11 +29,11 @@ FinDogAI combines voice-first interaction, offline-first Firebase/Firestore arch
 
 ### Functional Requirements
 
-**FR1:** The system shall provide a "Set Active Job" voice flow that accepts natural language input including numeric job IDs (e.g., "Set active job to 123" or "Set active job to Smith, Brno"), confirms via TTS, and persists the active job context to auto-assign subsequent costs.
+**FR1:** The system shall provide a "Set Active Job" voice flow that accepts natural language input including numeric job IDs (e.g., "Set active job to 123" or "Set active job to Smith, Brno"), confirms via TTS, and persists the active job context to auto-assign subsequent costs by default. Subsequent commands apply to the active job unless an inline job override is specified (e.g., "… for job 123"), in which case the operation targets that job without changing the active job.
 
 **FR2:** The system shall provide a "Start Journey" voice flow that accepts natural language input with destination, vehicle, and odometer reading (e.g., "I'm going to Brno in Transporter, odometer 12345"), confirms via TTS, and creates a journey event under the active job.
 
-**FR3:** The system shall provide manual entry screens for creating, editing, and deleting costs across five categories: Transport, Material, Labor, Machine, and Other, with support for referencing items by sequential ID in voice commands (e.g., "Update material 45").
+**FR3:** The system shall provide manual entry screens for creating, editing, and deleting costs across five categories: Transport, Material, Labor, Machine, and Other, with support for referencing items by sequential ID in voice commands (e.g., "Update material 45"). Manual forms default the targeted job to the current Active Job but allow changing the job before save.
 
 **FR4:** The system shall provide CRUD operations for Jobs with fields: auto-assigned jobNumber (server-allocated sequence), title, description, status (active/completed/archived), currency (ISO 4217), VAT rate, and budget.
 
@@ -70,6 +70,8 @@ FinDogAI combines voice-first interaction, offline-first Firebase/Firestore arch
 **FR20:** The system shall support true hands-free voice confirmation via wake-word ("Hey FinDog") followed by "yes" or "no" responses to accept or retry voice commands. This enables safe operation while driving or working with gloves. Touch-based Accept/Retry/Cancel buttons remain available as fallback for noisy environments or when hands are free.
 
 **FR21:** The system shall gracefully handle voice recognition errors and edge cases: background noise interference, unrecognized accents/technical terms, network timeouts during STT/LLM/TTS, Firestore write failures, device storage full (offline queue), battery-critical warnings during voice operations, and wrong-language detection. Each error scenario shall provide clear user feedback and recovery options (Retry, Switch to Manual Entry, Cancel).
+
+**FR22:** The system shall support multi-job context and inline job targeting. Any voice or manual command may specify an inline job override (e.g., "for job 123") to apply that single operation to the specified job without changing the Active Job. If no override is specified, the Active Job is used by default. If there is no Active Job and none is specified inline, the user is prompted to specify a job or set an Active Job. The Active Job changes only via the "Set Active Job" flow.
 
 
 ### Non-Functional Requirements
@@ -116,9 +118,12 @@ FinDogAI prioritizes a **voice-first, eyes-free interaction model** optimized fo
 
 3. **Sequential ID Shortcuts:** All lists (jobs, costs, resources) display prominent numeric IDs as primary visual identifiers, supporting voice commands like "Set active job to 123" or "Delete cost 45".
 
-4. **Offline-First Status Visibility:** Persistent connectivity indicator with sync queue count. Offline mode is presented as normal operation with standard UI appearance (no special color theme)—no blocking warnings, just informative badges.
 
-5. **Glove-Friendly Ergonomics:** Minimum 48dp touch targets, high contrast colors, avoid swipe gestures that require precision. Favor large buttons and voice over complex navigation hierarchies. No haptic feedback required.
+4. **Inline Job Targeting & Ephemeral Overrides:** Voice commands may include a job override (e.g., "Material 200 for job 123"). The action applies to that job without changing the Active Job. TTS readback always includes the targeted job (e.g., "for job one two three, Smith, Brno"). Use "Set Active Job" to change context; inline targeting is per-operation only.
+
+5. **Offline-First Status Visibility:** Persistent connectivity indicator with sync queue count. Offline mode is presented as normal operation with standard UI appearance (no special color theme)—no blocking warnings, just informative badges.
+
+6. **Glove-Friendly Ergonomics:** Minimum 48dp touch targets, high contrast colors, avoid swipe gestures that require precision. Favor large buttons and voice over complex navigation hierarchies. No haptic feedback required.
 
 ### Core Screens and Views
 
@@ -898,7 +903,9 @@ Select 1-9 or just type your question/feedback:
 7. If vehicleIdentifier is text, query Firestore for vehicle with name containing text (case-insensitive)
 8. If multiple vehicles match, return first vehicle (sorted by vehicleNumber)
 9. If no vehicle matches, return error: "Vehicle not found. Please say vehicle number or name."
-10. If no active job set, return error: "No active job. Please set an active job first."
+10a. Recognize optional inline job override phrase (e.g., "for job 123") and parse as `jobTarget` entity (job number or name)
+
+10. If no Active Job set and no inline job override specified, return error: "No active job. Please set an active job or specify a job in your command."; if inline job override is present, proceed with that job
 11. Mock mode returns hardcoded intent: `{intent: "StartJourney", entities: {destination: "Brno", vehicleIdentifier: "1", odometerReading: 12345}}`
 12. Parsed intent with matched vehicle data passed to Confirmation Loop
 
@@ -914,7 +921,7 @@ Select 1-9 or just type your question/feedback:
 2. STT transcribes → LLM parses → Vehicle queried → TTS confirms
 3. Voice Confirmation Modal displays: "✓ Journey to **Brno** | Vehicle: **[1] Transporter** | Odometer: **12,345 km**"
 4. TTS plays: "Starting journey to Brno in Transporter, odometer one two three four five. Say 'yes' to confirm or 'no' to retry."
-5. User responds "yes" (voice) OR taps Accept button → Journey event created in `/tenants/{tenantId}/jobs/{activeJobId}/events/{eventId}`
+5. User responds "yes" (voice) OR taps Accept button → Journey event created under targeted job (inline override if present, else Active Job) at `/tenants/{tenantId}/jobs/{jobId}/events/{eventId}`
 6. Event document: ordinalNumber (sequence), type: "journey_start", timestamp (now), data: {destination, vehicle: {full vehicle object copy}, odometerStart: 12345, odometerEnd: null, calculatedDistance: null, calculatedCost: null}, createdAt, createdBy (current team member ID)
 7. Success message (toast): "Journey to Brno started" (in user's language)
 8. Journey event displayed in Job Detail → Events timeline: "[ordinalNumber] Journey to Brno - Transporter - 12,345 km"
@@ -923,6 +930,11 @@ Select 1-9 or just type your question/feedback:
 11. Error handling: "No vehicles found. Add a vehicle in settings first."
 12. If odometer reading missing from transcription, prompt: "Please say odometer reading."
 13. Hands-free confirmation: After TTS ends, KWS listens for "yes"/"no"; voice response triggers corresponding action
+14. Optional job override: Saying "for job [id/name]" targets that job for this operation only and does not change the Active Job
+16. If inline job override specified, TTS and modal include the targeted job ("for job [number] [title]"); event is created under that job; Active Job remains unchanged
+
+15. If no Active Job and no job override specified, prompt: "Say job number or set an Active Job first"
+
 
 ### Story 4.3: Manual Cost Entry - Transport Category
 
@@ -1027,12 +1039,14 @@ Select 1-9 or just type your question/feedback:
 
 **Acceptance Criteria:**
 
-1. Intent added: `EndJourney` with entity `odometerReading` (integer)
-2. Precondition: An open journey exists for the active job (most recent `journey_start` event with `odometerEnd == null`)
+1. Intent added: `EndJourney` with entities: `odometerReading` (integer), optional `jobTarget` (job number or name)
+2. Precondition: An open journey exists for the targeted job (inline override if present, else Active Job) — the most recent `journey_start` event with `odometerEnd == null`
 3. On Accept: Update that event with `odometerEnd`, compute `calculatedDistance = max(0, odometerEnd - odometerStart)`, and `calculatedCost = calculatedDistance * vehicle.ratePerDistanceUnit` (rounded per currency rules)
 4. Also create a Transport cost at `/tenants/{tenantId}/jobs/{jobId}/costs/{costId}` with: `category: "Transport"`, `mode: "distance"`, `distance`, `vehicle` (full copy), `amount: calculatedCost`, ordinalNumber sequence, `createdAt/By`
 5. Validation: If no open journey, show "No ongoing journey to end"; if `odometerEnd < odometerStart`, prompt to re-enter
 6. TTS confirmation reads back: destination (if known), vehicle, end reading, calculated distance, and cost, ending with "Say 'yes' to confirm or 'no' to retry."; user responds via voice ("yes"/"no") or taps Accept/Retry/Cancel
+10. Inline override behavior: Saying "for job [id/name]" targets that job for this operation only and does not change the Active Job
+
 7. Error handling: Missing odometer → prompt; missing rate on vehicle → fallback to create distance-only cost with `amount: null` and banner "Set vehicle rate to price later"
 8. Offline: Voice disabled in production offline; manual End Journey remains available (enter end odometer in Events)
 9. Tests (mock providers): StartJourney then EndJourney → event updated and cost created; negative/zero distance handled; missing open journey shows error
@@ -1045,15 +1059,19 @@ Select 1-9 or just type your question/feedback:
 
 **Acceptance Criteria:**
 
-1. Intent added: `AddMaterialCost` with entities: `amount` OR (`quantity`, `unitPrice`), and optional `description`
+1. Intent added: `AddMaterialCost` with entities: `amount` OR (`quantity`, `unitPrice`), optional `description`, optional `jobTarget` (job number or name)
 2. Amount parsing supports integers/decimals; currency defaults to businessProfile.currency
 3. If `quantity` and `unitPrice` present, compute `amount = quantity * unitPrice` (rounded); store all three
-4. On Accept: Create cost under active job with `category: "Material"`, fields: `amount`, optional `quantity`, `unitPrice`, `description`, `createdAt/By`, sequential `ordinalNumber`
+4. On Accept: Create cost under targeted job (inline override if present, else Active Job) with `category: "Material"`, fields: `amount`, optional `quantity`, `unitPrice`, `description`, `createdAt/By`, sequential `ordinalNumber`
 5. TTS confirmation summarizes parsed values: "Material, 10 × 200 = 2,000 CZK, 'plasterboard'. Say 'yes' to confirm or 'no' to retry."
-6. Validation: If parsed amount missing, prompt: "Please say amount"; if no active job, show: "Set an active job first"
+6. Validation: If parsed amount missing, prompt: "Please say amount"; if no Active Job and no inline job override specified, prompt: "Say job number or name, or set an Active Job first"
 7. Privileges: Requires `canAddCosts: true`; otherwise show "Permission denied"
 8. Offline: Voice disabled in production offline; manual Material entry available in Story 4.4
 9. Tests: Variants with amount only, qty×price, with/without description; Czech phrases recognized
+10. Inline override behavior: Saying "for job [id/name]" targets that job for this operation only and does not change the Active Job
+11. TTS readback includes the targeted job: "for job [number] [title]"
+12. Tests: Include inline job override scenario and verify Active Job remains unchanged
+
 
 ### Story 4.9: Record Work Hours (Labor) Voice Flow
 
@@ -1063,11 +1081,15 @@ Select 1-9 or just type your question/feedback:
 
 **Acceptance Criteria:**
 
-1. Intent added: `AddLaborHours` with entities: `hours` (decimal), optional `teamMemberIdentifier` (name/number), optional `hourlyRate`
+1. Intent added: `AddLaborHours` with entities: `hours` (decimal), optional `teamMemberIdentifier` (name/number), optional `hourlyRate`, optional `jobTarget` (job number or name)
 2. Default team member: current user’s team member resource (`teamMembers` where `authUserId == uid`); if a different member is specified, resolve by number or name
 3. Rate selection: use provided `hourlyRate` if present; otherwise teamMember.hourlyRate; compute `amount = hours * rate` (rounded)
-4. On Accept: Create cost with `category: "Labor"`, `hours`, `rate`, `amount`, and embedded `teamMember` copy (id, number, name, hourlyRate); set `createdAt/By`, `ordinalNumber`
+4. On Accept: Create cost under targeted job (inline override if present, else Active Job) with `category: "Labor"`, `hours`, `rate`, `amount`, and embedded `teamMember` copy (id, number, name, hourlyRate); set `createdAt/By`, `ordinalNumber`
 5. TTS reads back: "Labor, 3.5 hours for Petr at 400 CZK/h = 1,400 CZK. Say 'yes' to confirm or 'no' to retry."
+10. Inline override behavior: Saying "for job [id/name]" targets that job for this operation only and does not change the Active Job
+11. TTS readback includes the targeted job: "for job [number] [title]"
+12. Tests: Include inline job override scenario and verify Active Job remains unchanged
+
 6. Validation: Missing hours → prompt; unknown member → prompt to repeat or default to current user
 7. Privileges: Requires `canAddCosts: true`; amounts hidden in UI if current viewer lacks `canViewFinancials`
 8. Offline: Voice disabled in production offline; manual Labor entry available in Story 4.4
@@ -1081,10 +1103,14 @@ Select 1-9 or just type your question/feedback:
 
 **Acceptance Criteria:**
 
-1. Intent added: `QuickExpense` with entities: `amount` and optional `description`
-2. On Accept: Create cost with `category: "Other"`, `amount`, optional `description`, `createdAt/By`, `ordinalNumber`
+1. Intent added: `QuickExpense` with entities: `amount`, optional `description`, optional `jobTarget` (job number or name)
+2. On Accept: Create cost under targeted job (inline override if present, else Active Job) with `category: "Other"`, `amount`, optional `description`, `createdAt/By`, `ordinalNumber`
 3. TTS confirmation: "Other expense, 50 CZK, 'parking'. Say 'yes' to confirm or 'no' to retry."
-4. Validation: If amount missing, prompt; if no active job, prompt to set one
+4. Validation: If amount missing, prompt; if no Active Job and no inline job override, prompt to specify job or set one
+8. Inline override behavior: Saying "for job [id/name]" targets that job for this operation only and does not change the Active Job
+9. TTS readback includes the targeted job: "for job [number] [title]"
+10. Tests: Include inline job override scenario and verify Active Job remains unchanged
+
 5. Privileges: Requires `canAddCosts: true`; viewers without `canViewFinancials` see description but amounts masked
 6. Offline: Voice disabled in production offline; manual Other entry available in Story 4.4
 7. Tests: Amount only, amount + note; verify amounts masked for restricted viewers
@@ -1307,6 +1333,8 @@ Select 1-9 or just type your question/feedback:
 
 **Acceptance Criteria:**
 
+
+
 1. Network errors: "Network error. Check your connection and try again."
 2. Firestore permission denied errors: "Access denied. Your account may not have permission for this action."
 3. Voice recognition errors: "Could not understand. Please try again." (with Retry button)
@@ -1332,6 +1360,8 @@ Select 1-9 or just type your question/feedback:
 2. **Voice Flows:** Core voice flows (Set Active Job, Start Journey, End Journey, Add Material Cost, Record Work Hours, Quick Expense) tested with realistic variations (different phrasings, Czech + English, numeric/text identifiers, hands-free "yes"/"no" confirmation responses) — baseline end-to-end success ≥80% in controlled conditions; report WER (median/P95), intent F1, and numeric exact-match; improvements tracked post-MVP
 2a. **Hands-Free Confirmation:** Validate voice confirmation works: speak command → hear TTS → say "yes" → action executes without touch; say "no" → retry flow; touch buttons remain functional as fallback
 2b. **Voice Error Handling:** Test all error scenarios from Story 3.7: network timeout, low STT confidence, unrecognized intent, storage full, battery critical, wrong language, missing entities — verify clear error messages and recovery options (Retry/Manual Entry/Cancel)
+2c. **Inline Job Targeting:** Validate commands with "for job [id/name]" apply to the specified job without changing the Active Job; TTS/modal include targeted job label
+
 3. **Offline Testing:** Airplane mode scenarios validated: Create job/cost offline → sync on reconnection → verify data on second device
 4. **Multi-Device Sync:** Same tenant logged in on phone + tablet → changes on one device appear on other within 10 seconds
 5. **Privilege Enforcement:** Test user with restricted privileges cannot access financial data or add costs (UI + API)
