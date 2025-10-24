@@ -49,7 +49,7 @@ FinDogAI combines voice-first interaction, offline-first Firebase/Firestore arch
 
 **FR10:** The system shall implement Firebase Authentication (email/password minimum) with Firestore Security Rules enforcing membership-based multi-tenant isolation under `/tenants/{tenantId}/**`. Access is allowed only for authenticated users that have a membership document at `/tenants/{tenantId}/members/{request.auth.uid}`; documents MUST include `tenantId` that matches the path; per-operation privileges are enforced via membership fields.
 
-**FR11:** The system shall support a basic team member privilege model stored on membership documents (`/tenants/{tenantId}/members/{uid}`) where the owner can assign individual toggles: `canAddCosts` (allows creating/updating/deleting cost-related entities) and `canViewFinancials` (allows reading budget/actual cost/profit fields). No role templates for MVP.
+**FR11:** The system shall support a basic team member privilege model stored on membership documents (`/tenants/{tenantId}/members/{uid}`) where the owner can assign individual toggles: `canAddCosts` (allows creating/updating/deleting cost-related entities) and `canViewFinancials` (allows reading budget/actual cost/profit fields). No role templates for MVP. Advanced permissions (granular view/edit/delete, job-specific visibility, time-bound access, and approval workflows for large expenses) are out of scope for MVP and deferred to Phase 2.
 
 **FR12:** The system shall require team member authentication and identification, storing the team member ID with all operations for audit trail purposes.
 
