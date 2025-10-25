@@ -314,7 +314,7 @@ FinDogAI prioritizes a **voice-first, eyes-free interaction model** optimized fo
     - tenantId, displayName, email, language, preferredVoiceProvider, aiSupportEnabled (boolean)
     - createdAt, updatedAt
 
-/userTenants/{uid}/memberships/{tenantId}
+/user_tenants/{uid}/memberships/{tenantId}
   - tenantId, role ("owner"|"member"), privileges snapshot (optional)
   - createdAt (derived), updatedAt
 
@@ -324,6 +324,29 @@ FinDogAI prioritizes a **voice-first, eyes-free interaction model** optimized fo
   - before (old data for UPDATE), after (new data for CREATE/UPDATE)
   - ttl (expires 1 year from timestamp)
 ```
+
+#### User-to-Tenant Mapping (user_tenants)
+
+- Purpose: Persist a mapping from Firebase Auth UID to a tenantId to enable strict multi-tenant isolation while using Firebase Authentication.
+- Collection name: user_tenants (standardized).
+- Document ID: {uid}
+- Fields: tenantId (UUID), createdAt (serverTimestamp)
+- Sign-in flow:
+  1) Extract `uid` from Firebase ID token
+  2) Resolve mapping at `user_tenants/{uid}` (or `/user_tenants/{uid}/memberships/{tenantId}` index)
+  3) If absent, create a new tenant and store the mapping atomically
+  4) Set custom claim `tenant_id = tenantId` and force-refresh the ID token
+- JWT example:
+```json
+{
+  "user_id": "firebase-uid",
+  "tenant_id": "550e8400-e29b-41d4-a716-446655440000",
+  "roles": ["user"]
+}
+```
+- Security: Firestore Rules require membership at `/tenants/{tenantId}/members/{uid}`; the mapping collection (`user_tenants`) is read-only to the client and maintained by Cloud Functions.
+- MVP policy: Default is one user → one tenant; invitation flows allow additional memberships. The active tenant is selected via the `tenant_id` custom claim (see Story 1.3b).
+
 
 **Voice Pipeline Providers (Configurable via Environment Variables):**
 - **STT:** Google Cloud Speech-to-Text (primary for Czech), OpenAI Whisper (fallback/testing)
@@ -453,11 +476,32 @@ FinDogAI prioritizes a **voice-first, eyes-free interaction model** optimized fo
 3. On successful registration, Firebase Auth user created
 4. On success, a new tenant is created at `/tenants/{tenantId}` (server-generated ID) with `createdBy: user.uid`, `createdAt`
 5. Membership document created at `/tenants/{tenantId}/members/{user.uid}` with `{ owner: true, canAddCosts: true, canViewFinancials: true }`
-6. Index document created at `/userTenants/{user.uid}/memberships/{tenantId}` for listing/selecting tenants (read-only; maintained by Cloud Functions)
+6. Index document created at `/user_tenants/{user.uid}/memberships/{tenantId}` for listing/selecting tenants (read-only; maintained by Cloud Functions)
 7. Initial profile docs created under `/tenants/{tenantId}`: `personProfile` (displayName, email, language: cs, aiSupportEnabled: true, createdAt) and `businessProfile` (currency: CZK, vatRate: 21%, distanceUnit: km, createdAt); create team member resource `teamMembers/{teamMemberId}` for the owner with `teamMemberNumber: 1`, `authUserId: user.uid`, `name: displayName`
 8. Success message displayed: "Welcome, [displayName]! Your account is ready."
 9. User automatically logged in and redirected to home screen
 10. Registration errors handled gracefully (email already exists, weak password, network failure)
+
+### Story 1.3a: User–Tenant Mapping Service (Get-or-Create)
+
+**As a** system architect,
+**I want** a backend service/Cloud Function that resolves or creates the user→tenant mapping on first sign-in,
+**so that** every authenticated user is scoped to a valid tenant and Security Rules can enforce isolation via `tenant_id`.
+
+**Acceptance Criteria:**
+
+1. Implement HTTPS callable `getOrCreateTenantForUser({ uid, displayName, email })`.
+2. Behavior:
+   - If a mapping exists at `user_tenants/{uid}` OR an index exists at `/user_tenants/{uid}/memberships/{tenantId}`, return the existing `tenantId`.
+   - If none exists, atomically create:
+     - `/tenants/{tenantId}` with `createdBy: uid`, `createdAt`
+     - `/tenants/{tenantId}/members/{uid}` with `{ owner: true, canAddCosts: true, canViewFinancials: true }`
+     - `/user_tenants/{uid}/memberships/{tenantId}` (read-only index for listing/selecting tenants)
+     - `user_tenants/{uid}` with `{ tenantId, createdAt }`
+3. Idempotency: Safe to call repeatedly without creating duplicates; concurrent calls do not create multiple tenants.
+4. After success, client invokes `setActiveTenantClaim({ tenantId })` (Story 1.3b) and force-refreshes the ID token.
+5. Emulator tests: First-time call creates tenant + mapping; subsequent calls return the same `tenantId` with no duplicates.
+
 
 
 ### Story 1.3b: Active Tenant Custom Claim
@@ -471,7 +515,7 @@ FinDogAI prioritizes a **voice-first, eyes-free interaction model** optimized fo
 1. Cloud Function (HTTPS callable) `setActiveTenantClaim({ tenantId })` validates that the caller has membership at `/tenants/{tenantId}/members/{uid}` and sets a custom Auth claim `tenant_id = tenantId` for the current user.
 2. Registration flow (Story 1.3): After creating the tenant + owner membership, client invokes `setActiveTenantClaim` and force-refreshes the ID token so claims are available immediately.
 3. Invitation redemption (Story 1.8): After membership creation, client invokes `setActiveTenantClaim` and force-refreshes the ID token.
-4. App init: If `tenant_id` claim is missing/stale but `/userTenants/{uid}/memberships/{tenantId}` exists, the app prompts or selects the appropriate tenant and calls `setActiveTenantClaim` to reconcile.
+4. App init: If `tenant_id` claim is missing/stale but `/user_tenants/{uid}/memberships/{tenantId}` exists, the app prompts or selects the appropriate tenant and calls `setActiveTenantClaim` to reconcile.
 5. Emulator tests: Non-members cannot set claims (permission denied). Owners and invited members can set claims; after setting, Security Rules allow access to the claimed tenant; switching tenants updates the claim and access accordingly.
 
 ### Story 1.4: User Login & Session Management
@@ -513,7 +557,7 @@ FinDogAI prioritizes a **voice-first, eyes-free interaction model** optimized fo
 10. Rules version controlled in git repository
 11. Rule: All documents under `/tenants/{tenantId}/**` must include a `tenantId` field equal to the path `tenantId`
 12. Rule: Membership documents (`/tenants/{tenantId}/members/{uid}`) can only be created/updated/deleted by owners; members may only update benign self-fields (e.g., `lastSeenAt`)
-13. Rule: `/userTenants/{uid}/memberships/{tenantId}` is read-only to the client (writes via Cloud Functions only)
+13. Rule: `/user_tenants/{uid}/memberships/{tenantId}` is read-only to the client (writes via Cloud Functions only)
 
 ### Story 1.6: Basic Health Check Screen & CI/CD Validation
 
@@ -562,7 +606,7 @@ FinDogAI prioritizes a **voice-first, eyes-free interaction model** optimized fo
 1. Onboarding flow supports "Join a team" with invite code/link input
 2. HTTPS callable `redeemInvite(code)` validates `codeHash`, TTL, single-use, and optional email binding; on success it:
    - Creates membership at `/tenants/{tenantId}/members/{uid}` with the preset privileges
-   - Creates index at `/userTenants/{uid}/memberships/{tenantId}` (read-only; maintained by Functions)
+   - Creates index at `/user_tenants/{uid}/memberships/{tenantId}` (read-only; maintained by Functions)
    - Creates team member resource at `/tenants/{tenantId}/teamMembers/{teamMemberId}` with `teamMemberNumber` allocated via `allocateSequence` (HTTPS callable if online; onCreate trigger if offline) and `authUserId: uid`
 3. On success, app switches to the joined tenant and displays confirmation
 4. If invalid/expired/already-used, show appropriate error and retry option; do not leak tenant existence
