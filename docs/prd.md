@@ -418,6 +418,28 @@ FinDogAI prioritizes a **voice-first, eyes-free interaction model** optimized fo
 11. Emulator configuration in `firebase.json` with ports defined
 12. `npm run emulators` starts all emulators successfully
 
+
+### Story 1.2b: Sequential Number Allocation (Foundational)
+
+**As a** system architect,
+**I want** server-assigned sequential numbers for tenant-level resources and per-job ordinal sequences,
+**so that** numbers are unique, voice-friendly, and work both online and offline.
+
+**Acceptance Criteria:**
+
+1. Cloud Function (HTTPS callable) `allocateSequence({ tenantId, sequence })` implemented; sequences supported:
+   - `jobNumber`, `teamMemberNumber`, `vehicleNumber`, `machineNumber` (tenant-level)
+   - `ordinalNumber` per job for: `/jobs/{jobId}/costs/*`, `/jobs/{jobId}/advances/*`, `/jobs/{jobId}/events/*`
+2. Sequence allocation uses Firestore transactions to guarantee strictly increasing integers with no duplicates under concurrency.
+3. OnCreate assignment triggers backfill missing sequence fields for offline-created documents:
+   - Jobs: set `jobNumber` if absent
+   - Team Members: set `teamMemberNumber` if absent
+   - Vehicles/Machines: set `vehicleNumber` / `machineNumber` if absent
+   - Per-job subcollections (costs/advances/events): set `ordinalNumber` if absent
+4. Owner bootstrap (Story 1.3): The initial team member for the tenant is reserved as `teamMemberNumber: 1`.
+5. Emulator tests: Online (callable) and offline (trigger) paths allocate without duplicates across ≥100 parallel creates per sequence; placeholders ('—') display in UI until numbers are assigned on sync where applicable.
+6. Sequence state persisted under `/tenants/{tenantId}/_counters/{sequenceName}` (or equivalent); README documents usage and error handling.
+
 ### Story 1.3: Multi-Tenant Authentication & User Registration
 
 **As a** new user,
@@ -436,6 +458,21 @@ FinDogAI prioritizes a **voice-first, eyes-free interaction model** optimized fo
 8. Success message displayed: "Welcome, [displayName]! Your account is ready."
 9. User automatically logged in and redirected to home screen
 10. Registration errors handled gracefully (email already exists, weak password, network failure)
+
+
+### Story 1.3b: Active Tenant Custom Claim
+
+**As a** system architect,
+**I want** a Cloud Function to set/update the user's active tenant custom claim,
+**so that** the app and Security Rules can reliably scope access by `tenant_id`.
+
+**Acceptance Criteria:**
+
+1. Cloud Function (HTTPS callable) `setActiveTenantClaim({ tenantId })` validates that the caller has membership at `/tenants/{tenantId}/members/{uid}` and sets a custom Auth claim `tenant_id = tenantId` for the current user.
+2. Registration flow (Story 1.3): After creating the tenant + owner membership, client invokes `setActiveTenantClaim` and force-refreshes the ID token so claims are available immediately.
+3. Invitation redemption (Story 1.8): After membership creation, client invokes `setActiveTenantClaim` and force-refreshes the ID token.
+4. App init: If `tenant_id` claim is missing/stale but `/userTenants/{uid}/memberships/{tenantId}` exists, the app prompts or selects the appropriate tenant and calls `setActiveTenantClaim` to reconcile.
+5. Emulator tests: Non-members cannot set claims (permission denied). Owners and invited members can set claims; after setting, Security Rules allow access to the claimed tenant; switching tenants updates the claim and access accordingly.
 
 ### Story 1.4: User Login & Session Management
 
@@ -526,7 +563,7 @@ FinDogAI prioritizes a **voice-first, eyes-free interaction model** optimized fo
 2. HTTPS callable `redeemInvite(code)` validates `codeHash`, TTL, single-use, and optional email binding; on success it:
    - Creates membership at `/tenants/{tenantId}/members/{uid}` with the preset privileges
    - Creates index at `/userTenants/{uid}/memberships/{tenantId}` (read-only; maintained by Functions)
-   - Creates team member resource at `/tenants/{tenantId}/teamMembers/{teamMemberId}` with `teamMemberNumber` and `authUserId: uid`
+   - Creates team member resource at `/tenants/{tenantId}/teamMembers/{teamMemberId}` with `teamMemberNumber` allocated via `allocateSequence` (HTTPS callable if online; onCreate trigger if offline) and `authUserId: uid`
 3. On success, app switches to the joined tenant and displays confirmation
 4. If invalid/expired/already-used, show appropriate error and retry option; do not leak tenant existence
 5. Emulator tests validate end-to-end redemption and Security Rules for membership-gated access
@@ -1052,7 +1089,7 @@ Select 1-9 or just type your question/feedback:
 1. Intent added: `EndJourney` with entities: `odometerReading` (integer), optional `jobTarget` (job number or name)
 2. Precondition: An open journey exists for the targeted job (inline override if present, else Active Job) — the most recent `journey_start` event with `odometerEnd == null`
 3. On Accept: Update that event with `odometerEnd`, compute `calculatedDistance = max(0, odometerEnd - odometerStart)`, and `calculatedCost = calculatedDistance * vehicle.ratePerDistanceUnit` (rounded per currency rules)
-4. Also create a Transport cost at `/tenants/{tenantId}/jobs/{jobId}/costs/{costId}` with: `category: "Transport"`, `mode: "distance"`, `distance`, `vehicle` (full copy), `amount: calculatedCost`, ordinalNumber sequence, `createdAt/By`
+4. Also create a Transport cost at `/tenants/{tenantId}/jobs/{jobId}/costs/{costId}` with: `category: "transport"`, `mode: "distance"`, `distance`, `vehicle` (full copy), `amount: calculatedCost`, ordinalNumber sequence, `createdAt/By`
 5. Validation: If no open journey, show "No ongoing journey to end"; if `odometerEnd < odometerStart`, prompt to re-enter
 6. TTS confirmation reads back: destination (if known), vehicle, end reading, calculated distance, and cost, ending with "Say 'yes' to confirm or 'no' to retry."; user responds via voice ("yes"/"no") or taps Accept/Retry/Cancel
 10. Inline override behavior: Saying "for job [id/name]" targets that job for this operation only and does not change the Active Job
@@ -1386,7 +1423,7 @@ Select 1-9 or just type your question/feedback:
 14. **Load Testing (Basic):** 10 concurrent users creating jobs/costs → no errors, acceptable latency (<2s for writes)
 15. **Production Deployment:** Deploy to Firebase Hosting + Functions, accessible at production URL, all env variables configured
 16. **Conflict Resolution Testing:** Validate Story 6.3 scenarios: concurrent edits (LWW), delete-vs-update conflicts (Sync Issues UI), offline sequential ID allocation (no duplicates), partial sync failures (retry mechanism)
-17. **Post-Deployment Smoke Test:** Register new user → create job → add cost via voice → export PDF (Phase 2) → all steps succeed
+17. **Post-Deployment Smoke Test (MVP):** Register new user → create job → add cost via voice → all steps succeed. Note: PDF export is Phase 2 and will be verified when Story 6.1 lands (skipped in MVP).
 18. **Rollback Plan:** Document rollback procedure if critical bugs found post-launch
 
 ---
