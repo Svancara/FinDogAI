@@ -50,7 +50,7 @@ FinDogAI combines voice-first interaction, offline-first Firebase/Firestore arch
 
 **FR7:** The system shall maintain basic audit metadata on all database entities: createdAt timestamp, createdBy user ID, updatedAt timestamp, and updatedBy user ID.
 
-**FR8:** The system shall implement comprehensive audit logging via Cloud Functions triggers (onCreate/onUpdate/onDelete) that capture full operation history to a separate audit_logs collection, including: operation type, timestamp, author (user ID), old values (for UPDATE), and complete object snapshots (for DELETE). Audit logs are backend-only (no user-facing UI) and auto-expire after 1 year for cost optimization.
+**FR8:** The system shall implement comprehensive audit logging via Cloud Functions triggers (onCreate/onUpdate/onDelete) that capture full operation history to a tenant-scoped `audit_logs` subcollection under `/tenants/{tenantId}`, including: operation type, timestamp, author (user ID), old values (for UPDATE), and complete object snapshots (for DELETE). Audit logs are backend-only (no user-facing UI) and auto-expire after 1 year for cost optimization.
 
 **FR9:** The system shall track Advances as a per-job subcollection with auto-assigned ordinalNumber (server-allocated per-job sequence), displaying sum of advances vs sum of costs.
 
@@ -230,7 +230,7 @@ FinDogAI prioritizes a **voice-first, eyes-free interaction model** optimized fo
    - Local state management (NgRx or Signals)
 
 2. **Serverless Backend (Cloud Functions):**
-   - **onCreate/onUpdate/onDelete triggers:** Audit logging to `audit_logs` collection
+   - **onCreate/onUpdate/onDelete triggers:** Audit logging to `/tenants/{tenantId}/audit_logs` subcollection
    - **HTTPS callable:** PDF generation (pdfmake library) — Phase 2
    - **HTTPS callable:** allocateSequence (transactional) — allocates next number for tenant-level sequences (jobNumber, vehicleNumber, machineNumber, teamMemberNumber) and per-job sequence (ordinalNumber)
    - **onCreate assignment triggers:** when an entity is created without its sequence field (offline create), assign the next number atomically and write it back to the document
@@ -305,7 +305,7 @@ FinDogAI prioritizes a **voice-first, eyes-free interaction model** optimized fo
     - createdAt, createdBy, updatedAt, updatedBy
   teamMembers/{teamMemberId}
     - tenantId, teamMemberNumber (sequence), name, hourlyRate
-    - authUserId (Firebase Auth UID for login mapping; owners team member #1 maps to owner)
+    - authUserId (Firebase Auth UID for login mapping; owner's team member #1 maps to owner)
     - createdAt, createdBy, updatedAt, updatedBy
   businessProfile (document)
     - tenantId, currency, vatRate, distanceUnit
@@ -313,16 +313,16 @@ FinDogAI prioritizes a **voice-first, eyes-free interaction model** optimized fo
   personProfile (document)
     - tenantId, displayName, email, language, preferredVoiceProvider, aiSupportEnabled (boolean)
     - createdAt, updatedAt
+  audit_logs/{logId}
+    - operation (CREATE|UPDATE|DELETE), collection, documentId, tenantId
+    - timestamp, authorId (team member ID)
+    - before (old data for UPDATE), after (new data for CREATE/UPDATE)
+    - ttl (expires 1 year from timestamp)
 
 /user_tenants/{uid}/memberships/{tenantId}
   - tenantId, role ("owner"|"member"), privileges snapshot (optional)
   - createdAt (derived), updatedAt
 
-/audit_logs/{logId}
-  - operation (CREATE|UPDATE|DELETE), collection, documentId, tenantId
-  - timestamp, authorId (team member ID)
-  - before (old data for UPDATE), after (new data for CREATE/UPDATE)
-  - ttl (expires 1 year from timestamp)
 ```
 
 #### User-to-Tenant Mapping (user_tenants)
@@ -548,7 +548,7 @@ FinDogAI prioritizes a **voice-first, eyes-free interaction model** optimized fo
 1. Security Rules file `firestore.rules` created
 2. Rule: Users can access `/tenants/{tenantId}/**` only if a membership exists at `/tenants/{tenantId}/members/{request.auth.uid}`; writes to cost-related entities require `member.canAddCosts == true`; reads of financial fields require `member.canViewFinancials == true`
 3. Rule: Unauthenticated users have no read/write access (except public collections if needed in future)
-4. Rule: Audit logs (`/audit_logs/{logId}`) are Cloud Functions–only (client cannot read or write)
+4. Rule: Audit logs (`/tenants/{tenantId}/audit_logs/{logId}`) are Cloud Functions–only (client cannot read or write)
 5. Rules deployed to Firebase via `firebase deploy --only firestore:rules`
 6. Manual testing: User A cannot read User B's jobs (returns permission denied)
 7. Manual testing: Unauthenticated request to Firestore returns permission denied
@@ -1220,7 +1220,7 @@ Select 1-9 or just type your question/feedback:
 **Acceptance Criteria:**
 
 1. Cloud Function `onJobCreate` triggers on `/tenants/{tenantId}/jobs/{jobId}` onCreate
-2. Function writes to `/audit_logs/{logId}` with: operation: "CREATE", collection: "jobs", documentId: jobId, tenantId, timestamp (server time), authorId (from job.createdBy), after: {full job document}, ttl: (timestamp + 1 year)
+2. Function writes to `/tenants/{tenantId}/audit_logs/{logId}` with: operation: "CREATE", collection: "jobs", documentId: jobId, tenantId, timestamp (server time), authorId (from job.createdBy), after: {full job document}, ttl: (timestamp + 1 year)
 3. Cloud Function `onJobUpdate` triggers on `/tenants/{tenantId}/jobs/{jobId}` onUpdate
 4. Function writes audit log with: operation: "UPDATE", before: {old job document}, after: {new job document}
 5. Cloud Function `onJobDelete` triggers on `/tenants/{tenantId}/jobs/{jobId}` onDelete
@@ -1260,7 +1260,7 @@ Select 1-9 or just type your question/feedback:
 **Acceptance Criteria:**
 
 1. Cloud Function `scheduledAuditLogCleanup` configured with Cloud Scheduler: runs daily at 2:00 AM UTC
-2. Function queries `/audit_logs` where `ttl < now()` (finds expired logs)
+2. Function queries `/tenants/{tenantId}/audit_logs` where `ttl < now()` (finds expired logs)
 3. Function deletes expired logs in batches of 500 (Firestore batch write limit)
 4. If >500 expired logs exist, function continues in batches until all deleted
 5. Function logs summary: "Deleted X audit logs older than 1 year"
