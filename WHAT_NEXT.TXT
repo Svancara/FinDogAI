@@ -1,0 +1,64 @@
+CHANGE CLAUDE MODEL ??
+DISABLE Augment!!
+
+
+----------------------------------
+DRUHA HLASKA:
+The document now provides comprehensive guidance for frontend development of the FinDogAI application.
+
+----------------------------------
+PRVNI HLASKA:
+Now that we have the complete Frontend Architecture Document, here are the logical next steps:
+
+  What's Next?
+
+  1. Backend Architecture Document (create-backend-architecture)
+
+  Since you have the frontend architecture complete, you'll need the backend counterpart covering:
+  - Cloud Functions implementation
+  - Firestore security rules
+  - Firebase Auth configuration
+  - Sequence allocation service
+  - PDF generation service
+  - Voice command processing
+
+  2. Start Implementation (shard-prd)
+
+  Break down your PRD into actionable development tasks:
+  - Create epics and user stories
+  - Generate development tickets
+  - Prioritize implementation order
+
+  3. Document the Full Project (document-project)
+
+  Create comprehensive documentation of your current project state, including:
+  - Current implementation status
+  - Integration points
+  - Development setup guide
+
+  4. Create Full-Stack Architecture (create-full-stack-architecture)
+
+  Combine frontend and backend into a unified architecture document showing:
+  - End-to-end data flow
+  - Integration patterns
+  - Deployment strategy
+
+  5. Run Architecture Checklist (execute-checklist)
+
+  Validate your architecture against best practices:
+  - Security review
+  - Performance optimization opportunities
+  - Scalability assessment
+
+  6. Research Specific Topics (research {topic})
+
+  Deep dive into specific areas like:
+  - Voice pipeline optimization
+  - Offline sync strategies
+  - PWA best practices
+
+  My Recommendation: Since you have the frontend architecture done, I'd suggest either:
+  - Option 1: Create the backend architecture (type 1 or create-backend-architecture) to complete your technical documentation
+  - Option 2: Shard the PRD (type 2 or shard-prd) to start breaking down the work into implementable chunks
+
+  Which would you like to tackle next?

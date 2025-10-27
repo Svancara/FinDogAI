@@ -1701,24 +1701,1401 @@ export const appConfig: ApplicationConfig = {
 };
 ```
 
-## Styling Guidelines (Complete)
+## Styling Guidelines
 
-[Previous styling section content remains the same - already complete]
+### Theme System Configuration
 
-## Testing Requirements (Complete)
+```scss
+// apps/mobile-app/src/theme/variables.scss
 
-[Previous testing section content remains the same - already complete]
+:root {
+  /* ===== Color Palette ===== */
+  --ion-color-primary: #3880ff;
+  --ion-color-primary-rgb: 56, 128, 255;
+  --ion-color-primary-contrast: #ffffff;
+  --ion-color-primary-contrast-rgb: 255, 255, 255;
+  --ion-color-primary-shade: #3171e0;
+  --ion-color-primary-tint: #4c8dff;
 
-## Environment Configuration (Complete)
+  --ion-color-secondary: #3dc2ff;
+  --ion-color-secondary-rgb: 61, 194, 255;
+  --ion-color-secondary-contrast: #ffffff;
+  --ion-color-secondary-contrast-rgb: 255, 255, 255;
+  --ion-color-secondary-shade: #36abe0;
+  --ion-color-secondary-tint: #50c8ff;
 
-[Previous environment section content remains the same - already complete]
+  --ion-color-tertiary: #5260ff;
+  --ion-color-tertiary-rgb: 82, 96, 255;
+  --ion-color-tertiary-contrast: #ffffff;
+  --ion-color-tertiary-contrast-rgb: 255, 255, 255;
+  --ion-color-tertiary-shade: #4854e0;
+  --ion-color-tertiary-tint: #6370ff;
 
-## Frontend Developer Standards (Complete)
+  --ion-color-success: #2dd36f;
+  --ion-color-success-rgb: 45, 211, 111;
+  --ion-color-success-contrast: #ffffff;
+  --ion-color-success-contrast-rgb: 255, 255, 255;
+  --ion-color-success-shade: #28ba62;
+  --ion-color-success-tint: #42d77d;
 
-[Previous developer standards section content remains the same - already complete]
+  --ion-color-warning: #ffc409;
+  --ion-color-warning-rgb: 255, 196, 9;
+  --ion-color-warning-contrast: #000000;
+  --ion-color-warning-contrast-rgb: 0, 0, 0;
+  --ion-color-warning-shade: #e0ac08;
+  --ion-color-warning-tint: #ffca22;
+
+  --ion-color-danger: #eb445a;
+  --ion-color-danger-rgb: 235, 68, 90;
+  --ion-color-danger-contrast: #ffffff;
+  --ion-color-danger-contrast-rgb: 255, 255, 255;
+  --ion-color-danger-shade: #cf3c4f;
+  --ion-color-danger-tint: #ed576b;
+
+  /* ===== App-Specific Colors ===== */
+  --app-primary: var(--ion-color-primary);
+  --app-primary-contrast: var(--ion-color-primary-contrast);
+  --app-success: var(--ion-color-success);
+  --app-warning: var(--ion-color-warning);
+  --app-danger: var(--ion-color-danger);
+
+  /* Voice UI Colors */
+  --voice-idle-color: #92949c;
+  --voice-listening-color: #3880ff;
+  --voice-processing-color: #ffc409;
+  --voice-speaking-color: #2dd36f;
+  --voice-error-color: #eb445a;
+  --voice-active-pulse: rgba(56, 128, 255, 0.3);
+  --voice-recording-pulse: rgba(255, 196, 9, 0.3);
+
+  /* ===== Typography ===== */
+  --font-family-base: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-family-monospace: 'Courier New', Courier, monospace;
+
+  /* Font Sizes */
+  --font-size-xs: 0.75rem;   /* 12px */
+  --font-size-sm: 0.875rem;  /* 14px */
+  --font-size-base: 1rem;    /* 16px */
+  --font-size-md: 1.125rem;  /* 18px */
+  --font-size-lg: 1.25rem;   /* 20px */
+  --font-size-xl: 1.5rem;    /* 24px */
+  --font-size-2xl: 2rem;     /* 32px */
+
+  /* Font Weights */
+  --font-weight-light: 300;
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  /* Line Heights */
+  --line-height-tight: 1.25;
+  --line-height-normal: 1.5;
+  --line-height-relaxed: 1.75;
+
+  /* ===== Spacing System ===== */
+  --spacing-xs: 0.25rem;  /* 4px */
+  --spacing-sm: 0.5rem;   /* 8px */
+  --spacing-md: 1rem;     /* 16px */
+  --spacing-lg: 1.5rem;   /* 24px */
+  --spacing-xl: 2rem;     /* 32px */
+  --spacing-2xl: 3rem;    /* 48px */
+  --spacing-3xl: 4rem;    /* 64px */
+
+  /* ===== Touch Targets (Glove-Friendly) ===== */
+  --touch-target-min: 48px;         /* Minimum touch target */
+  --touch-target-comfortable: 56px;  /* Comfortable for gloves */
+  --touch-target-large: 64px;       /* Extra large for critical actions */
+
+  /* ===== Border Radius ===== */
+  --radius-none: 0;
+  --radius-sm: 0.25rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+  --radius-full: 50%;
+
+  /* ===== Shadows ===== */
+  --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.1);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 10px 20px rgba(0, 0, 0, 0.1);
+  --shadow-xl: 0 20px 40px rgba(0, 0, 0, 0.15);
+
+  /* ===== Z-Index Scale ===== */
+  --z-dropdown: 1000;
+  --z-sticky: 1020;
+  --z-fixed: 1030;
+  --z-modal-backdrop: 1040;
+  --z-modal: 1050;
+  --z-popover: 1060;
+  --z-tooltip: 1070;
+  --z-toast: 1080;
+
+  /* ===== Transitions ===== */
+  --transition-fast: 150ms ease-in-out;
+  --transition-base: 250ms ease-in-out;
+  --transition-slow: 350ms ease-in-out;
+
+  /* ===== Offline Mode ===== */
+  --offline-bg: #fff7ed;
+  --offline-border: #f59e0b;
+  --offline-text: #92400e;
+}
+
+/* ===== Dark Mode ===== */
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* Dark mode color overrides */
+    --ion-color-primary: #428cff;
+    --ion-color-primary-rgb: 66, 140, 255;
+    --ion-color-primary-contrast: #ffffff;
+    --ion-color-primary-contrast-rgb: 255, 255, 255;
+    --ion-color-primary-shade: #3a7be0;
+    --ion-color-primary-tint: #5598ff;
+
+    /* Background colors for dark mode */
+    --ion-background-color: #121212;
+    --ion-background-color-rgb: 18, 18, 18;
+    --ion-text-color: #ffffff;
+    --ion-text-color-rgb: 255, 255, 255;
+
+    /* Card and surface colors */
+    --ion-card-background: #1e1e1e;
+    --ion-item-background: #1e1e1e;
+
+    /* Dark mode shadows (lighter shadows) */
+    --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.3);
+    --shadow-lg: 0 10px 20px rgba(0, 0, 0, 0.3);
+    --shadow-xl: 0 20px 40px rgba(0, 0, 0, 0.3);
+
+    /* Dark mode offline indicators */
+    --offline-bg: #451a03;
+    --offline-border: #f59e0b;
+    --offline-text: #fef3c7;
+  }
+}
+
+/* ===== Utility Classes ===== */
+.touch-target {
+  min-width: var(--touch-target-min);
+  min-height: var(--touch-target-min);
+}
+
+.touch-target-large {
+  min-width: var(--touch-target-large);
+  min-height: var(--touch-target-large);
+}
+
+/* Voice UI States */
+.voice-listening {
+  --ion-color-base: var(--voice-active-color);
+  animation: pulse 1.5s infinite;
+}
+
+.voice-recording {
+  --ion-color-base: var(--voice-recording-pulse);
+  animation: recording-pulse 1s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+@keyframes recording-pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
+
+/* Offline Mode Styling */
+.offline-banner {
+  background: var(--offline-bg);
+  border: 1px solid var(--offline-border);
+  color: var(--offline-text);
+  padding: var(--spacing-sm) var(--spacing-md);
+  text-align: center;
+  position: sticky;
+  top: 0;
+  z-index: var(--z-sticky);
+}
+
+/* PWA Install Prompt */
+.pwa-install-prompt {
+  position: fixed;
+  bottom: var(--spacing-lg);
+  left: var(--spacing-md);
+  right: var(--spacing-md);
+  background: var(--ion-color-primary);
+  color: var(--ion-color-primary-contrast);
+  padding: var(--spacing-md);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  z-index: var(--z-toast);
+}
+```
+
+### Component-Specific Styling Patterns
+
+```scss
+// Example: Job Card Component Styling
+// apps/mobile-app/src/app/features/jobs/components/job-card/job-card.component.scss
+
+:host {
+  display: block;
+}
+
+.job-card {
+  &__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--spacing-md);
+
+    &--active {
+      background: var(--app-primary);
+      color: var(--app-primary-contrast);
+    }
+  }
+
+  &__title {
+    font-size: var(--font-size-lg);
+    font-weight: var(--font-weight-semibold);
+    margin: 0;
+  }
+
+  &__status {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+
+    &-indicator {
+      width: 8px;
+      height: 8px;
+      border-radius: var(--radius-full);
+
+      &--synced { background: var(--app-success); }
+      &--pending { background: var(--app-warning); }
+      &--error { background: var(--app-danger); }
+    }
+  }
+
+  &__actions {
+    display: flex;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-md);
+
+    ion-button {
+      min-height: var(--touch-target-min);
+      min-width: var(--touch-target-comfortable);
+    }
+  }
+}
+
+// Responsive adjustments
+@media (max-width: 576px) {
+  .job-card {
+    &__actions {
+      flex-direction: column;
+
+      ion-button {
+        width: 100%;
+      }
+    }
+  }
+}
+```
+
+### Rationale for Styling Approach
+
+**CSS Custom Properties First:**
+- Runtime theming without rebuilds
+- Dark mode switching instant
+- Consistent spacing/sizing across app
+- Easy white-labeling for future clients
+
+**Glove-Friendly Touch Targets:**
+- Minimum 48px targets (Material Design guideline)
+- Comfortable 56px for primary actions
+- Large 64px for critical voice/safety actions
+
+**Voice UI Visual Feedback:**
+- Distinct colors for listening/recording/processing
+- Animations for active states
+- Clear visual hierarchy for voice commands
+
+**Offline Mode Indicators:**
+- Sticky positioning for constant awareness
+- Distinct color scheme from normal operations
+- Non-intrusive but noticeable
 
 ---
 
 *Document Version: 1.0*
 *Last Updated: 2025-01-27*
 *Created by: Winston (Architect)*
+
+## Testing Requirements
+
+### Component Test Template
+
+Here's the Jest test template for Angular 20+ components with Ionic and offline support:
+
+```typescript
+// job-detail.component.spec.ts
+import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
+import { IonicModule } from '@ionic/angular';
+import { provideMockStore, MockStore } from '@ngrx/store/testing';
+import { signal } from '@angular/core';
+import { JobDetailComponent } from './job-detail.component';
+import { NetworkService } from '@core/services/network.service';
+import { SyncQueueService } from '@core/services/sync-queue.service';
+import { selectActiveJob, selectJobLoading } from '../data-access/jobs.selectors';
+import { JobsActions } from '../data-access/jobs.actions';
+
+describe('JobDetailComponent', () => {
+  let component: JobDetailComponent;
+  let fixture: ComponentFixture<JobDetailComponent>;
+  let store: MockStore;
+  let networkService: jasmine.SpyObj<NetworkService>;
+  let syncQueueService: jasmine.SpyObj<SyncQueueService>;
+
+  const mockJob = {
+    id: 'job-123',
+    title: 'Test Job',
+    status: 'active',
+    jobNumber: 1001,
+    budget: 5000,
+    currency: 'USD',
+    vatRate: 20,
+    tenantId: 'tenant-123',
+    createdAt: new Date(),
+    updatedAt: new Date()
+  };
+
+  beforeEach(async () => {
+    // Create service spies
+    const networkSpy = jasmine.createSpyObj('NetworkService', [], {
+      isOnline: signal(true),
+      online$: of(true)
+    });
+
+    const syncQueueSpy = jasmine.createSpyObj('SyncQueueService',
+      ['addOperation', 'processPendingOperations'],
+      { pendingCount$: of(0) }
+    );
+
+    await TestBed.configureTestingModule({
+      imports: [
+        JobDetailComponent, // Standalone component
+        IonicModule.forRoot()
+      ],
+      providers: [
+        provideMockStore({
+          initialState: {
+            jobs: {
+              entities: { [mockJob.id]: mockJob },
+              ids: [mockJob.id],
+              selectedId: mockJob.id,
+              loading: false,
+              error: null
+            }
+          },
+          selectors: [
+            { selector: selectActiveJob, value: mockJob },
+            { selector: selectJobLoading, value: false }
+          ]
+        }),
+        provideRouter([]),
+        { provide: NetworkService, useValue: networkSpy },
+        { provide: SyncQueueService, useValue: syncQueueSpy }
+      ]
+    }).compileComponents();
+
+    store = TestBed.inject(MockStore);
+    networkService = TestBed.inject(NetworkService) as jasmine.SpyObj<NetworkService>;
+    syncQueueService = TestBed.inject(SyncQueueService) as jasmine.SpyObj<SyncQueueService>;
+
+    fixture = TestBed.createComponent(JobDetailComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+  });
+
+  afterEach(() => {
+    store.resetSelectors();
+  });
+
+  describe('Component Initialization', () => {
+    it('should create', () => {
+      expect(component).toBeTruthy();
+    });
+
+    it('should load job data on init', () => {
+      spyOn(store, 'dispatch');
+      component.ngOnInit();
+
+      expect(store.dispatch).toHaveBeenCalledWith(
+        JobsActions.loadJobDetail({ id: mockJob.id })
+      );
+    });
+
+    it('should display job title', () => {
+      const titleElement = fixture.nativeElement.querySelector('ion-title');
+      expect(titleElement.textContent).toContain(mockJob.title);
+    });
+  });
+
+  describe('Offline Behavior', () => {
+    it('should show offline indicator when network is unavailable', () => {
+      networkService.isOnline = signal(false);
+      fixture.detectChanges();
+
+      const offlineChip = fixture.nativeElement.querySelector('.offline-chip');
+      expect(offlineChip).toBeTruthy();
+      expect(offlineChip.textContent).toContain('Offline');
+    });
+
+    it('should queue updates when offline', async () => {
+      networkService.isOnline = signal(false);
+      const updateData = { title: 'Updated Title' };
+
+      await component.save(updateData);
+
+      expect(syncQueueService.addOperation).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          type: 'UPDATE_JOB',
+          payload: jasmine.objectContaining({
+            id: mockJob.id,
+            data: updateData
+          })
+        })
+      );
+    });
+
+    it('should show pending sync count', () => {
+      syncQueueService.pendingCount$ = of(3);
+      fixture.detectChanges();
+
+      const syncBadge = fixture.nativeElement.querySelector('ion-badge');
+      expect(syncBadge.textContent).toContain('3');
+    });
+  });
+
+  describe('User Interactions', () => {
+    it('should navigate back when back button is clicked', () => {
+      const backButton = fixture.nativeElement.querySelector('ion-back-button');
+      backButton.click();
+
+      // Verify navigation occurred (Ionic handles this internally)
+      expect(backButton).toBeTruthy();
+    });
+
+    it('should handle form submission', () => {
+      spyOn(store, 'dispatch');
+      const formData = { title: 'New Title', budget: 10000 };
+
+      component.save(formData);
+
+      expect(store.dispatch).toHaveBeenCalledWith(
+        JobsActions.updateJob({
+          id: mockJob.id,
+          changes: formData
+        })
+      );
+    });
+
+    it('should show unsaved changes warning', () => {
+      component.hasUnsavedChanges.set(true);
+
+      const canDeactivate = component.canDeactivate();
+      expect(canDeactivate).toBeFalsy();
+    });
+  });
+
+  describe('State Management', () => {
+    it('should update job signal when store emits new value', () => {
+      const updatedJob = { ...mockJob, title: 'Updated Job' };
+      store.overrideSelector(selectActiveJob, updatedJob);
+      store.refreshState();
+
+      expect(component.job()).toEqual(updatedJob);
+    });
+
+    it('should handle loading state', () => {
+      store.overrideSelector(selectJobLoading, true);
+      store.refreshState();
+
+      const progressBar = fixture.nativeElement.querySelector('ion-progress-bar');
+      expect(progressBar).toBeTruthy();
+    });
+
+    it('should handle error state', () => {
+      const errorMessage = 'Failed to load job';
+      component.error.set(errorMessage);
+      fixture.detectChanges();
+
+      const errorElement = fixture.nativeElement.querySelector('.error-message');
+      expect(errorElement.textContent).toContain(errorMessage);
+    });
+  });
+
+  describe('Accessibility', () => {
+    it('should have proper ARIA labels', () => {
+      const saveButton = fixture.nativeElement.querySelector('[aria-label="Save job"]');
+      expect(saveButton).toBeTruthy();
+    });
+
+    it('should support keyboard navigation', () => {
+      const firstInput = fixture.nativeElement.querySelector('ion-input');
+      firstInput.focus();
+
+      expect(document.activeElement).toBe(firstInput);
+    });
+  });
+});
+```
+
+### Integration Test Example
+
+```typescript
+// voice-pipeline.integration.spec.ts
+import { TestBed } from '@angular/core/testing';
+import { VoicePipelineService } from '@core/services/voice-pipeline.service';
+import { Store } from '@ngrx/store';
+import { provideMockStore } from '@ngrx/store/testing';
+
+describe('Voice Pipeline Integration', () => {
+  let voiceService: VoicePipelineService;
+  let store: MockStore;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [
+        VoicePipelineService,
+        provideMockStore({ initialState: {} }),
+        // Mock Speech Recognition
+        {
+          provide: 'SpeechRecognition',
+          useValue: jasmine.createSpyObj('SpeechRecognition', [
+            'start', 'stop', 'addEventListener'
+          ])
+        }
+      ]
+    });
+
+    voiceService = TestBed.inject(VoicePipelineService);
+    store = TestBed.inject(MockStore);
+  });
+
+  describe('Voice Command Flow', () => {
+    it('should process "set active job" command', async () => {
+      const mockTranscript = 'set active job number 1234';
+      spyOn(store, 'dispatch');
+
+      // Simulate STT result
+      await voiceService.processTranscript(mockTranscript);
+
+      expect(store.dispatch).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          type: '[Voice] Set Active Job',
+          jobNumber: 1234
+        })
+      );
+    });
+
+    it('should handle "start journey" command', async () => {
+      const mockTranscript = 'start journey to client site';
+
+      const result = await voiceService.processTranscript(mockTranscript);
+
+      expect(result.intent).toBe('START_JOURNEY');
+      expect(result.destination).toBe('client site');
+    });
+
+    it('should queue commands when offline', async () => {
+      // Set offline state
+      voiceService.setOfflineMode(true);
+
+      const mockTranscript = 'add material cost concrete 500 dollars';
+      const result = await voiceService.processTranscript(mockTranscript);
+
+      expect(result.queued).toBeTruthy();
+      expect(result.willProcessWhenOnline).toBeTruthy();
+    });
+  });
+});
+```
+
+### E2E Test with Playwright
+
+```typescript
+// e2e/specs/job-creation.spec.ts
+import { test, expect, devices } from '@playwright/test';
+
+// Test on multiple devices including mobile
+test.describe('Job Creation Flow', () => {
+  test.use({ ...devices['iPhone 13'] }); // Mobile viewport
+
+  test.beforeEach(async ({ page }) => {
+    // Start with PWA installed
+    await page.goto('/');
+
+    // Login
+    await page.fill('[data-testid="email-input"]', 'test@example.com');
+    await page.fill('[data-testid="password-input"]', 'password123');
+    await page.click('[data-testid="login-button"]');
+
+    // Wait for navigation
+    await page.waitForURL('/tabs/jobs');
+  });
+
+  test('should create a new job', async ({ page }) => {
+    // Navigate to job creation
+    await page.click('[data-testid="create-job-fab"]');
+
+    // Fill job form
+    await page.fill('[data-testid="job-title-input"]', 'Renovation Project');
+    await page.fill('[data-testid="job-budget-input"]', '25000');
+    await page.selectOption('[data-testid="job-currency-select"]', 'USD');
+
+    // Save job
+    await page.click('[data-testid="save-job-button"]');
+
+    // Verify navigation back to list
+    await expect(page).toHaveURL('/tabs/jobs');
+
+    // Verify job appears in list
+    const jobCard = page.locator('[data-testid="job-card"]').first();
+    await expect(jobCard).toContainText('Renovation Project');
+  });
+
+  test('should work offline', async ({ page, context }) => {
+    // Go offline
+    await context.setOffline(true);
+
+    // Try to create a job
+    await page.click('[data-testid="create-job-fab"]');
+    await page.fill('[data-testid="job-title-input"]', 'Offline Job');
+    await page.click('[data-testid="save-job-button"]');
+
+    // Verify offline indicator
+    await expect(page.locator('.offline-banner')).toBeVisible();
+    await expect(page.locator('.offline-banner')).toContainText('Offline Mode');
+
+    // Verify optimistic update
+    await expect(page.locator('[data-testid="job-card"]')).toContainText('Offline Job');
+
+    // Go back online
+    await context.setOffline(false);
+
+    // Verify sync indicator appears and disappears
+    await expect(page.locator('.sync-indicator')).toBeVisible();
+    await expect(page.locator('.sync-indicator')).toBeHidden({ timeout: 5000 });
+  });
+
+  test('should handle glove interaction', async ({ page }) => {
+    // Simulate touch with larger area (glove simulation)
+    const button = page.locator('[data-testid="voice-command-button"]');
+    const box = await button.boundingBox();
+
+    // Verify button is large enough for glove use
+    expect(box?.width).toBeGreaterThanOrEqual(56); // min touch target
+    expect(box?.height).toBeGreaterThanOrEqual(56);
+
+    // Tap with offset to simulate imprecise glove tap
+    await button.tap({ position: { x: 10, y: 10 } });
+
+    // Verify action still triggered
+    await expect(page.locator('.voice-listening')).toBeVisible();
+  });
+});
+```
+
+### Testing Best Practices
+
+1. **Unit Tests:** Test individual components in isolation
+   - Mock all dependencies (Store, Services, Ionic components)
+   - Test component logic, not framework behavior
+   - Focus on user interactions and state changes
+   - Aim for 80%+ coverage of business logic
+
+2. **Integration Tests:** Test component interactions
+   - Test complete user flows within a feature
+   - Mock external dependencies (APIs, Firebase)
+   - Verify state management flows
+   - Test offline/online transitions
+
+3. **E2E Tests:** Test critical user flows (using Playwright)
+   - Login → Create Job → Add Costs → Generate Report
+   - Voice command flows
+   - Offline mode operations
+   - PWA installation and updates
+   - Multi-device sync scenarios
+
+4. **Coverage Goals:** Aim for 80% code coverage
+   - 90%+ for critical business logic
+   - 80%+ for components
+   - 70%+ for effects/services
+   - Focus on behavior, not line coverage
+
+5. **Test Structure:** Arrange-Act-Assert pattern
+   ```typescript
+   it('should update job when save is clicked', () => {
+     // Arrange
+     const mockData = { title: 'Updated' };
+     spyOn(store, 'dispatch');
+
+     // Act
+     component.save(mockData);
+
+     // Assert
+     expect(store.dispatch).toHaveBeenCalledWith(expectedAction);
+   });
+   ```
+
+6. **Mock External Dependencies:** API calls, routing, state management
+   - Use provideMockStore for NgRx
+   - Create service spies with Jasmine
+   - Mock Firestore operations
+   - Simulate network conditions
+
+### Testing Scripts
+
+```json
+// package.json
+{
+  "scripts": {
+    "test": "nx test mobile-app",
+    "test:watch": "nx test mobile-app --watch",
+    "test:coverage": "nx test mobile-app --coverage",
+    "test:ci": "nx test mobile-app --coverage --browsers=ChromeHeadless",
+    "e2e": "nx e2e mobile-app-e2e",
+    "e2e:ci": "nx e2e mobile-app-e2e --config=ci",
+    "e2e:debug": "nx e2e mobile-app-e2e --debug",
+    "test:all": "nx run-many --target=test --all --parallel"
+  }
+}
+```
+
+### Rationale for Testing Strategy
+
+**Jest over Karma/Jasmine:**
+- Faster test execution (important for CI/CD)
+- Better watch mode for development
+- Snapshot testing support
+- Modern assertion library
+
+**Playwright over Cypress:**
+- Per explicit requirement (NOT Cypress)
+- Better mobile device emulation
+- Supports offline testing
+- Native app testing capability
+
+**Focus Areas:**
+- Offline/online transitions (critical for field use)
+- Voice command accuracy
+- Glove-friendly interactions
+- State synchronization
+
+## Environment Configuration
+
+Here are the required environment variables for your Angular/Ionic PWA:
+
+### Development Environment
+
+```typescript
+// apps/mobile-app/src/environments/environment.ts
+export const environment = {
+  production: false,
+  appVersion: '1.0.0-dev',
+
+  // Firebase Configuration
+  firebase: {
+    apiKey: 'AIzaSyDEVELOPMENT_KEY_HERE',
+    authDomain: 'findogai-dev.firebaseapp.com',
+    projectId: 'findogai-dev',
+    storageBucket: 'findogai-dev.appspot.com',
+    messagingSenderId: '123456789',
+    appId: '1:123456789:web:abcdef123456',
+    measurementId: 'G-DEVELOPMENT'
+  },
+
+  // Cloud Functions Endpoints
+  functionsUrl: 'http://localhost:5001/findogai-dev/us-central1',
+  functionsRegion: 'us-central1',
+
+  // Voice Pipeline Configuration
+  voice: {
+    speechRecognitionLang: 'en-US',
+    speechSynthesisVoice: 'Google US English',
+    commandTimeout: 5000, // 5 seconds
+    wakeWord: 'Hey FinDog', // Optional wake word
+    llmProvider: 'openai', // or 'anthropic'
+    llmApiKey: process.env['LLM_API_KEY'] || '', // Load from env
+    llmModel: 'gpt-4o-mini' // or 'claude-3-haiku'
+  },
+
+  // Offline Configuration
+  offline: {
+    enablePersistence: true,
+    cacheSizeBytes: 50 * 1024 * 1024, // 50MB
+    syncInterval: 30000, // 30 seconds
+    maxRetries: 3,
+    retryDelay: 1000 // 1 second base delay
+  },
+
+  // PWA Configuration
+  pwa: {
+    enabled: true,
+    updateCheckInterval: 3600000, // 1 hour
+    updateMode: 'prompt', // or 'auto'
+    offlineGoogleAnalytics: false
+  },
+
+  // Feature Flags
+  features: {
+    voiceCommands: true,
+    offlineMode: true,
+    pdfGeneration: false, // Phase 2
+    advancedReporting: false, // Phase 2
+    teamCollaboration: true,
+    costTracking: true
+  },
+
+  // Logging
+  logging: {
+    level: 'debug', // 'error' | 'warn' | 'info' | 'debug'
+    remoteLogging: false,
+    logToConsole: true
+  },
+
+  // Development Tools
+  devTools: {
+    reduxDevTools: true,
+    performanceMonitoring: true,
+    showDebugInfo: true
+  }
+};
+```
+
+### Production Environment
+
+```typescript
+// apps/mobile-app/src/environments/environment.prod.ts
+export const environment = {
+  production: true,
+  appVersion: '1.0.0',
+
+  // Firebase Configuration (Production)
+  firebase: {
+    apiKey: process.env['FIREBASE_API_KEY'],
+    authDomain: 'findogai.firebaseapp.com',
+    projectId: 'findogai-prod',
+    storageBucket: 'findogai-prod.appspot.com',
+    messagingSenderId: process.env['FIREBASE_MESSAGING_SENDER_ID'],
+    appId: process.env['FIREBASE_APP_ID'],
+    measurementId: process.env['FIREBASE_MEASUREMENT_ID']
+  },
+
+  // Cloud Functions Endpoints (Production)
+  functionsUrl: 'https://us-central1-findogai-prod.cloudfunctions.net',
+  functionsRegion: 'us-central1',
+
+  // Voice Pipeline Configuration
+  voice: {
+    speechRecognitionLang: 'en-US',
+    speechSynthesisVoice: 'Google US English',
+    commandTimeout: 5000,
+    wakeWord: 'Hey FinDog',
+    llmProvider: process.env['LLM_PROVIDER'] || 'openai',
+    llmApiKey: process.env['LLM_API_KEY'],
+    llmModel: process.env['LLM_MODEL'] || 'gpt-4o-mini'
+  },
+
+  // Offline Configuration
+  offline: {
+    enablePersistence: true,
+    cacheSizeBytes: 100 * 1024 * 1024, // 100MB
+    syncInterval: 60000, // 1 minute
+    maxRetries: 5,
+    retryDelay: 2000 // 2 seconds base delay
+  },
+
+  // PWA Configuration
+  pwa: {
+    enabled: true,
+    updateCheckInterval: 7200000, // 2 hours
+    updateMode: 'prompt',
+    offlineGoogleAnalytics: true
+  },
+
+  // Feature Flags (Production)
+  features: {
+    voiceCommands: true,
+    offlineMode: true,
+    pdfGeneration: false, // Enable in Phase 2
+    advancedReporting: false,
+    teamCollaboration: true,
+    costTracking: true
+  },
+
+  // Logging (Production)
+  logging: {
+    level: 'error',
+    remoteLogging: true,
+    logToConsole: false,
+    sentryDsn: process.env['SENTRY_DSN'] // Error tracking
+  },
+
+  // Development Tools (Disabled in Production)
+  devTools: {
+    reduxDevTools: false,
+    performanceMonitoring: true,
+    showDebugInfo: false
+  }
+};
+```
+
+### Environment Variable Files (.env)
+
+```bash
+# .env.local (Development - Git ignored)
+FIREBASE_API_KEY=your_dev_api_key_here
+FIREBASE_AUTH_DOMAIN=findogai-dev.firebaseapp.com
+FIREBASE_PROJECT_ID=findogai-dev
+FIREBASE_STORAGE_BUCKET=findogai-dev.appspot.com
+FIREBASE_MESSAGING_SENDER_ID=123456789
+FIREBASE_APP_ID=1:123456789:web:abcdef
+FIREBASE_MEASUREMENT_ID=G-XXXXX
+
+# LLM Configuration
+LLM_PROVIDER=openai
+LLM_API_KEY=sk-dev-xxxxxxxxxxxxx
+LLM_MODEL=gpt-4o-mini
+
+# Development URLs
+API_URL=http://localhost:5001
+APP_URL=http://localhost:4200
+
+# Feature Flags
+ENABLE_DEBUG_MODE=true
+ENABLE_MOCK_DATA=true
+
+# .env.production (Production - Secure storage)
+FIREBASE_API_KEY=${SECRET_FIREBASE_API_KEY}
+FIREBASE_AUTH_DOMAIN=findogai.firebaseapp.com
+FIREBASE_PROJECT_ID=findogai-prod
+FIREBASE_STORAGE_BUCKET=findogai-prod.appspot.com
+FIREBASE_MESSAGING_SENDER_ID=${SECRET_FIREBASE_SENDER_ID}
+FIREBASE_APP_ID=${SECRET_FIREBASE_APP_ID}
+FIREBASE_MEASUREMENT_ID=${SECRET_MEASUREMENT_ID}
+
+# LLM Configuration
+LLM_PROVIDER=openai
+LLM_API_KEY=${SECRET_LLM_API_KEY}
+LLM_MODEL=gpt-4o-mini
+
+# Production URLs
+API_URL=https://api.findogai.com
+APP_URL=https://app.findogai.com
+
+# Error Tracking
+SENTRY_DSN=${SECRET_SENTRY_DSN}
+
+# Analytics
+GA_TRACKING_ID=${SECRET_GA_TRACKING_ID}
+```
+
+### Build Configuration
+
+```json
+// apps/mobile-app/project.json (Nx configuration)
+{
+  "name": "mobile-app",
+  "targets": {
+    "build": {
+      "configurations": {
+        "development": {
+          "fileReplacements": [
+            {
+              "replace": "apps/mobile-app/src/environments/environment.ts",
+              "with": "apps/mobile-app/src/environments/environment.ts"
+            }
+          ],
+          "optimization": false,
+          "sourceMap": true,
+          "namedChunks": true
+        },
+        "production": {
+          "fileReplacements": [
+            {
+              "replace": "apps/mobile-app/src/environments/environment.ts",
+              "with": "apps/mobile-app/src/environments/environment.prod.ts"
+            }
+          ],
+          "optimization": true,
+          "sourceMap": false,
+          "namedChunks": false,
+          "serviceWorker": true,
+          "ngswConfigPath": "apps/mobile-app/ngsw-config.json"
+        },
+        "staging": {
+          "fileReplacements": [
+            {
+              "replace": "apps/mobile-app/src/environments/environment.ts",
+              "with": "apps/mobile-app/src/environments/environment.staging.ts"
+            }
+          ],
+          "optimization": true,
+          "sourceMap": true
+        }
+      }
+    },
+    "serve": {
+      "configurations": {
+        "development": {
+          "buildTarget": "mobile-app:build:development",
+          "hmr": true,
+          "port": 4200
+        },
+        "production": {
+          "buildTarget": "mobile-app:build:production",
+          "port": 4200
+        }
+      }
+    }
+  }
+}
+```
+
+### Environment Usage in Code
+
+```typescript
+// Example: Using environment variables in a service
+import { Injectable } from '@angular/core';
+import { environment } from '@environments/environment';
+
+@Injectable({ providedIn: 'root' })
+export class ConfigService {
+  get isProduction(): boolean {
+    return environment.production;
+  }
+
+  get firebaseConfig() {
+    return environment.firebase;
+  }
+
+  get isVoiceEnabled(): boolean {
+    return environment.features.voiceCommands;
+  }
+
+  get llmApiKey(): string {
+    if (!environment.voice.llmApiKey) {
+      throw new Error('LLM API key not configured');
+    }
+    return environment.voice.llmApiKey;
+  }
+
+  get offlineConfig() {
+    return environment.offline;
+  }
+
+  shouldShowDebugInfo(): boolean {
+    return !environment.production && environment.devTools.showDebugInfo;
+  }
+}
+```
+
+### Capacitor Environment Configuration
+
+```typescript
+// capacitor.config.ts
+import { CapacitorConfig } from '@capacitor/cli';
+
+const config: CapacitorConfig = {
+  appId: 'com.findogai.app',
+  appName: 'FinDogAI',
+  webDir: 'dist/apps/mobile-app',
+  bundledWebRuntime: false,
+  server: {
+    // Development server config
+    url: process.env['CAP_SERVER_URL'], // For live reload
+    cleartext: true // Allow HTTP in development
+  },
+  plugins: {
+    App: {
+      iosScheme: 'findogai',
+      androidScheme: 'findogai'
+    },
+    SplashScreen: {
+      launchShowDuration: 2000,
+      backgroundColor: '#3880ff',
+      showSpinner: true,
+      spinnerColor: '#ffffff'
+    },
+    PushNotifications: {
+      presentationOptions: ['badge', 'sound', 'alert']
+    }
+  },
+  ios: {
+    contentInset: 'automatic',
+    limitsNavigationBarChanges: false
+  },
+  android: {
+    minWebViewVersion: 80,
+    enableJetifier: true
+  }
+};
+
+export default config;
+```
+
+### Rationale for Environment Configuration
+
+**Environment Separation:**
+- Clear distinction between dev/staging/prod
+- Secure handling of sensitive keys
+- Feature flag control per environment
+
+**Voice Pipeline Configuration:**
+- Configurable LLM providers for cost optimization
+- Language settings for internationalization
+- Timeout controls for poor connectivity
+
+**Offline Settings:**
+- Tunable cache sizes for different devices
+- Configurable sync intervals
+- Retry strategies per environment
+
+**PWA Configuration:**
+- Update strategies (prompt vs auto)
+- Analytics integration
+- Service worker control
+
+## Frontend Developer Standards
+
+### Code Quality Standards
+
+1. **TypeScript Strict Mode**
+   ```json
+   // tsconfig.base.json
+   {
+     "compilerOptions": {
+       "strict": true,
+       "noImplicitAny": true,
+       "noImplicitReturns": true,
+       "noFallthroughCasesInSwitch": true,
+       "noUnusedLocals": true,
+       "noUnusedParameters": true,
+       "strictNullChecks": true,
+       "strictFunctionTypes": true,
+       "strictBindCallApply": true,
+       "strictPropertyInitialization": true
+     }
+   }
+   ```
+
+2. **ESLint Configuration**
+   ```json
+   // .eslintrc.json
+   {
+     "extends": [
+       "eslint:recommended",
+       "plugin:@typescript-eslint/recommended",
+       "plugin:@angular-eslint/recommended"
+     ],
+     "rules": {
+       "@typescript-eslint/explicit-function-return-type": "error",
+       "@typescript-eslint/no-explicit-any": "error",
+       "no-console": ["error", { "allow": ["warn", "error"] }],
+       "max-len": ["error", { "code": 120 }]
+     }
+   }
+   ```
+
+3. **Prettier Configuration**
+   ```json
+   // .prettierrc
+   {
+     "singleQuote": true,
+     "trailingComma": "none",
+     "arrowParens": "avoid",
+     "printWidth": 120,
+     "tabWidth": 2,
+     "semi": true
+   }
+   ```
+
+### Development Workflow
+
+1. **Branch Naming Convention**
+   - `feature/JIRA-123-description`
+   - `bugfix/JIRA-456-description`
+   - `hotfix/critical-issue`
+   - `chore/update-dependencies`
+
+2. **Commit Message Format**
+   ```
+   <type>(<scope>): <subject>
+
+   <body>
+
+   <footer>
+   ```
+   Types: feat, fix, docs, style, refactor, test, chore
+
+3. **Pull Request Template**
+   ```markdown
+   ## Description
+   Brief description of changes
+
+   ## Type of Change
+   - [ ] Bug fix
+   - [ ] New feature
+   - [ ] Breaking change
+   - [ ] Documentation update
+
+   ## Testing
+   - [ ] Unit tests pass
+   - [ ] E2E tests pass
+   - [ ] Manual testing completed
+
+   ## Checklist
+   - [ ] Code follows style guidelines
+   - [ ] Self-review completed
+   - [ ] Comments added for complex code
+   - [ ] Documentation updated
+   ```
+
+### Performance Guidelines
+
+1. **Bundle Size Optimization**
+   - Use lazy loading for all feature modules
+   - Implement code splitting
+   - Tree-shake unused imports
+   - Monitor bundle size with webpack-bundle-analyzer
+
+2. **Runtime Performance**
+   - Use OnPush change detection strategy
+   - Implement virtual scrolling for long lists
+   - Use trackBy functions in *ngFor
+   - Debounce user input events
+   - Memoize expensive computations
+
+3. **PWA Optimization**
+   - Precache critical assets
+   - Implement proper cache strategies
+   - Optimize images (WebP format)
+   - Minimize initial load time
+
+### Accessibility Standards
+
+1. **WCAG 2.1 Level AA Compliance**
+   - All interactive elements keyboard accessible
+   - Proper ARIA labels and roles
+   - Color contrast ratios meet standards
+   - Focus indicators visible
+
+2. **Screen Reader Support**
+   - Semantic HTML elements
+   - Proper heading hierarchy
+   - Alt text for images
+   - Form labels associated with inputs
+
+3. **Mobile Accessibility**
+   - Touch targets minimum 48x48px
+   - Gesture alternatives provided
+   - Orientation support (portrait/landscape)
+   - Font scaling support
+
+### Security Best Practices
+
+1. **Data Protection**
+   - Never store sensitive data in localStorage
+   - Use secure Firebase rules
+   - Implement proper authentication checks
+   - Sanitize user input
+
+2. **API Security**
+   - Always use HTTPS
+   - Implement CSRF protection
+   - Add request rate limiting
+   - Validate all inputs
+
+3. **Code Security**
+   - Regular dependency updates
+   - Security audit with `npm audit`
+   - No hardcoded credentials
+   - Use environment variables for secrets
+
+### Documentation Standards
+
+1. **Code Documentation**
+   ```typescript
+   /**
+    * Processes voice command and updates application state
+    * @param transcript - The text from speech recognition
+    * @returns Promise with command result
+    * @throws {VoiceCommandError} If command cannot be processed
+    */
+   async processVoiceCommand(transcript: string): Promise<CommandResult> {
+     // Implementation
+   }
+   ```
+
+2. **Component Documentation**
+   - Purpose and usage
+   - Input/Output properties
+   - Events emitted
+   - Example usage
+
+3. **README Files**
+   - Setup instructions
+   - Development workflow
+   - Testing procedures
+   - Deployment process
+
+### Monitoring and Logging
+
+1. **Error Tracking**
+   - Sentry integration for production
+   - Structured error logging
+   - User context in error reports
+   - Performance monitoring
+
+2. **Analytics**
+   - Google Analytics for user behavior
+   - Custom events for key actions
+   - Performance metrics tracking
+   - Offline usage statistics
+
+3. **Debug Logging**
+   ```typescript
+   import { LogLevel } from '@core/services/logger.service';
+
+   logger.debug('Component initialized', { componentName: 'JobDetail' });
+   logger.info('Job saved successfully', { jobId: job.id });
+   logger.error('Failed to sync data', { error, context });
+   ```
+
+### Team Collaboration
+
+1. **Code Reviews**
+   - All code must be reviewed
+   - At least one approval required
+   - Focus on functionality, performance, security
+   - Constructive feedback
+
+2. **Knowledge Sharing**
+   - Weekly tech talks
+   - Documentation updates
+   - Pair programming for complex features
+   - Maintain decision log
+
+3. **Communication**
+   - Daily standup updates
+   - Sprint planning participation
+   - Retrospective feedback
+   - Slack/Teams for async communication
