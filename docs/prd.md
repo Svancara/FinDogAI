@@ -19,7 +19,7 @@
 
 Small entrepreneurs and craftsmen in Central Europe face a persistent profitability problem: accurately remembering and recording all costs, purchases, mileage, and work hours at day's end. This manual recall process creates revenue leakage (estimated 5-15% of billable costs go unrecorded), cognitive burden after long workdays, and safety concerns from attempting to type notes while driving. Current solutions—generic expense trackers, voice assistants, and job management software—fail to address the unique combination of needs: hands-free voice capture, offline-first reliability, domain-specific intent recognition for craftsman workflows, and job-specific cost allocation.
 
-FinDogAI combines voice-first interaction, offline-first Firebase/Firestore architecture, and AI-powered natural language understanding to create a hands-free assistant optimized for mobile craftsmen. The MVP focuses on foundational voice flows (Set Active Job + Start Journey with Odometer) and includes high-frequency capture commands (End Journey, Add Material Cost, Record Work Hours, Quick Expense) to match daily workflows. The solution leverages on-device keyword spotting for true hands-free operation, streaming speech-to-text with multilingual support, LLM-based intent recognition, and conversational TTS confirmation—production voice flows require network STT/LLM/TTS; offline development uses mock providers; when offline in the field, voice interactions are disabled and the app operates without AI support via manual flows; on-device KWS and platform-native TTS may operate offline for availability notifications; automatic sync when connectivity returns.
+FinDogAI combines voice-first interaction, offline-first Firebase/Firestore architecture, and AI-powered natural language understanding to create a hands-free assistant optimized for mobile craftsmen. The MVP focuses on foundational voice flows (Set Active Job + Start Journey with Odometer) and includes high-frequency capture commands (End Journey, Add Material Cost, Record Work Hours, Quick Expense) to match daily workflows. The solution leverages on-device keyword spotting for true hands-free operation, non-streaming (short-utterance) speech-to-text in MVP (streaming planned for Phase 2) with multilingual support, LLM-based intent recognition, and conversational TTS confirmation—production voice flows require network STT/LLM/TTS; offline development uses mock providers; when offline in the field, voice interactions are disabled and the app operates without AI support via manual flows; on-device KWS and platform-native TTS may operate offline for availability notifications; automatic sync when connectivity returns.
 
 ### Change Log
 
@@ -50,13 +50,16 @@ FinDogAI combines voice-first interaction, offline-first Firebase/Firestore arch
 
 **FR7:** The system shall maintain basic audit metadata on all database entities: createdAt timestamp, createdBy user ID, updatedAt timestamp, and updatedBy user ID.
 
-**FR8:** The system shall implement comprehensive audit logging via Cloud Functions triggers (onCreate/onUpdate/onDelete) that capture full operation history to a tenant-scoped `audit_logs` subcollection under `/tenants/{tenantId}`, including: operation type, timestamp, author (user ID), old values (for UPDATE), and complete object snapshots (for DELETE). Audit logs are backend-only (no user-facing UI) and auto-expire after 1 year for cost optimization.
+**FR8:** The system shall implement comprehensive audit logging via Cloud Functions triggers (onCreate/onUpdate/onDelete) that capture full operation history to a tenant-scoped `audit_logs` subcollection under `/tenants/{tenantId}`, including: operation type, timestamp, author (user ID), old values (for UPDATE), and complete object snapshots (for DELETE). Audit logs have owner-only UI access (representative and team member have no access), are excluded from exports, and auto-expire after 1 year for cost optimization.
 
 **FR9:** The system shall track Advances as a per-job subcollection with auto-assigned ordinalNumber (server-allocated per-job sequence), displaying sum of advances vs sum of costs.
 
-**FR10:** The system shall implement Firebase Authentication (email/password minimum) with Firestore Security Rules enforcing membership-based multi-tenant isolation under `/tenants/{tenantId}/**`. Access is allowed only for authenticated users that have a membership document at `/tenants/{tenantId}/members/{request.auth.uid}`; documents MUST include `tenantId` that matches the path; per-operation privileges are enforced via membership fields.
+**FR10:** The system shall implement Firebase Authentication (email/password minimum) with Firestore Security Rules enforcing membership-based multi-tenant isolation under `/tenants/{tenantId}/**`. Access is allowed only for authenticated users that have a membership document at `/tenants/{tenantId}/members/{request.auth.uid}`; documents MUST include `tenantId` that matches the path; per-operation access is enforced via `membership.role`.
 
-**FR11:** The system shall support a basic team member privilege model stored on membership documents (`/tenants/{tenantId}/members/{uid}`) where the owner can assign individual toggles: `canAddCosts` (allows creating/updating/deleting cost-related entities) and `canViewFinancials` (allows reading budget/actual cost/profit fields). No role templates for MVP. Advanced permissions (granular view/edit/delete, job-specific visibility, time-bound access, and approval workflows for large expenses) are out of scope for MVP and deferred to Phase 2.
+**FR11:** The system shall use role-based access control on membership documents (`/tenants/{tenantId}/members/{uid}`) with fields: `role ∈ {owner, representative, teamMember}` and `status ∈ {active, disabled}`. Role semantics:
+- Owner: full access to all functions and data, including audit logs and exports.
+- Owner's representative: Jobs are read-only; cannot change Business Profile; cannot change privileges; cannot view audit_logs; cannot export any data; all other functions and data are fully available (including costs and resources).
+- Team member: Jobs are read-only (only active jobs visible; only `jobNumber` and `title` shown); cannot change Business Profile, privileges, or resources; cannot export any data; no access to the advances collection; all other functions and data are available (including adding/editing costs).
 
 **FR12:** The system shall require team member authentication and identification, storing the team member ID with all operations for audit trail purposes.
 
@@ -80,7 +83,7 @@ FinDogAI combines voice-first interaction, offline-first Firebase/Firestore arch
 
 **FR22:** The system shall support multi-job context and inline job targeting. Any voice or manual command may specify an inline job override (e.g., "for job 123") to apply that single operation to the specified job without changing the Active Job. If no override is specified, the Active Job is used by default. If there is no Active Job and none is specified inline, the user is prompted to specify a job or set an Active Job. The Active Job changes only via the "Set Active Job" flow.
 
-**FR23:** The system shall provide GDPR-compliant data export functionality, allowing users to download all their tenant data (jobs, costs, advances, team members, vehicles, machines, audit logs) in JSON format via Cloud Function with email delivery.
+**FR23:** The system shall provide GDPR-compliant data export functionality, allowing owners to download all their tenant data (jobs, costs, advances, team members, vehicles, machines) in JSON format via a Cloud Function that generates a short-lived signed URL for authenticated download (no direct email attachments). Audit logs are excluded from export. Server-side privilege check: owner required.
 
 
 
@@ -108,12 +111,14 @@ FinDogAI combines voice-first interaction, offline-first Firebase/Firestore arch
 
 **NFR11:** Audit log storage shall be optimized to minimize Firestore costs while meeting compliance requirements; estimated 2-3x increase in write operations due to Cloud Functions triggers. TTL (Time-To-Live) policy of 1 year enforced via scheduled Cloud Function for automatic log cleanup.
 
-**NFR12:** The system shall implement cascade delete functionality for user data deletion to support GDPR data portability and right-to-erasure, including audit log entries.
+**NFR12:** The system shall implement cascade delete functionality for user data deletion to support GDPR data portability and right-to-erasure, including audit log entries, except where legal obligations require retention; retention/exceptions are documented in the Compliance policy.
 
 **NFR13:** The system shall use configurable provider endpoints for STT, LLM, and TTS to enable cost optimization and vendor flexibility.
 
 **NFR14:** Cloud Functions audit triggers shall execute asynchronously without blocking client operations, with <500ms execution time for standard CRUD operations.
 
+
+**NFR15:** All numeric, currency, and distance values are formatted per user locale (cs-CZ vs en-US), including thousands separators, decimal marks, currency symbols, and unit labels.
 ## User Interface Design Goals
 
 ### Overall UX Vision
@@ -133,19 +138,19 @@ FinDogAI prioritizes a **voice-first, eyes-free interaction model** optimized fo
 
 5. **Offline-First Status Visibility:** Persistent connectivity indicator with sync queue count. Offline mode is presented as normal operation with standard UI appearance (no special color theme)—no blocking warnings, just informative badges.
 
-6. **Glove-Friendly Ergonomics:** Minimum 48dp touch targets, high contrast colors, avoid swipe gestures that require precision. Favor large buttons and voice over complex navigation hierarchies. No haptic feedback required.
+6. **Glove-Friendly Ergonomics:** Minimum 48dp touch targets, high contrast colors, avoid swipe gestures that require precision. Favor large buttons and voice over complex navigation hierarchies. Haptic feedback optional (user-toggle).
 
 ### Core Screens and Views
 
 1. **Voice Command Hub (Home Screen):** Central microphone button (wake-word optional), active job display, recent activity feed, quick stats (costs today, sync status). Primary entry point for voice interactions.
 
-2. **Jobs List:** Scrollable job cards showing `[jobNumber] Title - Status` with financial summary (costs vs budget). Sorted by status first, then by jobNumber ascending. Tap to view details, long-press for quick "Set Active" action.
+2. **Jobs List:** Scrollable job cards showing `[jobNumber] Title - Status`. Financial summary (costs vs budget) visible to owner and representative; team member sees only active jobs and no financial summary. Sorted by status first, then by jobNumber ascending. Tap to view details, long-press for quick "Set Active" action.
 
 3. **Job Detail View:** Tabbed interface: Costs (breakdown by category with sequential IDs), Advances (ordinalNumber + amount), Events timeline, PDF export action (Phase 2).
 
 4. **Cost Entry Form (Manual Fallback):** Category-specific forms (Transport/Material/Labor/Machine/Other) with large number pads, vehicle/machine picker, voice dictation for descriptions. Pre-filled with active job context.
 
-5. **Resources Management:** Three tabs (Team Members, Vehicles, Machines). List view with sequential IDs and key properties (rates). Owner can toggle individual privileges on Team Member detail screen.
+5. **Resources Management:** Three tabs (Team Members, Vehicles, Machines). List view with sequential IDs and key properties (rates). Owner can set the member role on the Team Member detail screen.
 
 6. **Settings/Business Profile:** One-time setup wizard style for currency, VAT, distance unit, language preference, voice provider configuration (for developers).
 
@@ -194,7 +199,7 @@ FinDogAI prioritizes a **voice-first, eyes-free interaction model** optimized fo
 - **Primary:** Mobile phones (iOS 15+, Android 10+) in portrait orientation—5.5" to 6.7" screens
 - **Secondary:** Tablets (iPad, Android tablets) for office/desk use cases (viewing reports, bulk data entry)
 - **Tertiary:** Desktop browsers (Chrome/Edge/Safari) for admin tasks, but not optimized—mobile-first design scales up
-- **Native Builds:** Capacitor builds for iOS and Android with platform-specific permissions (microphone, filesystem) and optional OS integrations (Siri Shortcuts future consideration)
+- **Native Builds:** Capacitor builds for iOS and Android with platform-specific permissions (microphone, filesystem) and optional OS integrations (Siri Shortcuts future consideration). Note: iOS builds require macOS/Xcode.
 - **Network Conditions:** Optimized for 4G with offline-first, gracefully handles 3G degradation (slower voice API responses but fully functional)
 
 ## Technical Assumptions
@@ -281,15 +286,16 @@ FinDogAI prioritizes a **voice-first, eyes-free interaction model** optimized fo
 ```
 /tenants/{tenantId}/
   members/{uid}
-    - owner (boolean), canAddCosts (boolean), canViewFinancials (boolean)
+    - role (owner|representative|teamMember)
     - status (active|disabled), lastSeenAt
   invites/{inviteId}
-    - codeHash, expiresAt, createdBy, presetPrivileges, consumedAt (optional), email (optional)
+    - codeHash, expiresAt, createdBy, presetRole, consumedAt (optional), email (optional)
   jobs/{jobId}
     - tenantId, jobNumber (sequence), title, status, currency, vatRate, budget
     - createdAt, createdBy, updatedAt, updatedBy (audit metadata)
     costs/{costId}
-      - tenantId, ordinalNumber (sequence), category, amount, description, resourceId
+      - tenantId, ordinalNumber (sequence), category, amount, description
+      - resource (object copy at creation; non-authoritative): transport embeds vehicleNumber, name, distanceUnit, ratePerDistanceUnit; labor embeds teamMemberNumber, name, hourlyRate; machine embeds machineNumber, name, hourlyRate
       - createdAt, createdBy, updatedAt, updatedBy
     advances/{advanceId}
       - tenantId, ordinalNumber (sequence), amount, date, note
@@ -297,6 +303,8 @@ FinDogAI prioritizes a **voice-first, eyes-free interaction model** optimized fo
     events/{eventId}
       - tenantId, ordinalNumber (sequence), type, timestamp, data (journey details, etc.)
       - createdAt, createdBy, updatedAt, updatedBy
+  jobs_public/{jobId}
+    - jobNumber, title, status (sanitized read model for teamMember role)
   vehicles/{vehicleId}
     - tenantId, vehicleNumber (sequence), name, distanceUnit (from business profile), ratePerDistanceUnit
     - createdAt, createdBy, updatedAt, updatedBy
@@ -320,7 +328,7 @@ FinDogAI prioritizes a **voice-first, eyes-free interaction model** optimized fo
     - ttl (expires 1 year from timestamp)
 
 /user_tenants/{uid}/memberships/{tenantId}
-  - tenantId, role ("owner"|"member"), privileges snapshot (optional)
+  - tenantId, role ("owner"|"representative"|"teamMember") snapshot (optional)
   - createdAt (derived), updatedAt
 
 ```
@@ -336,7 +344,7 @@ FinDogAI prioritizes a **voice-first, eyes-free interaction model** optimized fo
   2) Resolve mapping at `user_tenants/{uid}` (or `/user_tenants/{uid}/memberships/{tenantId}` index)
   3) If absent, create a new tenant and store the mapping atomically
   4) Set custom claim `tenant_id = tenantId` and force-refresh the ID token
-- JWT example:
+- JWT example (roles illustrative only; authorization is enforced via membership documents):
 ```json
 {
   "user_id": "firebase-uid",
@@ -352,12 +360,12 @@ FinDogAI prioritizes a **voice-first, eyes-free interaction model** optimized fo
 - **STT:** Google Cloud Speech-to-Text (primary for Czech), OpenAI Whisper (fallback/testing)
 - **LLM/NLU:** OpenAI GPT-4-turbo (primary), Groq Llama3 (cost-efficient alternative), Ollama (local dev/testing)
 - **TTS:** Google Cloud Text-to-Speech (Czech voices: cs-CZ-Wavenet-A), platform-native fallback (Web Speech API)
-- **KWS:** Porcupine (Picovoice) or Vosk for on-device wake-word, configurable wake phrase (default: "Hey FinDog")
+- **KWS:** Porcupine (Picovoice) or Vosk for on-device wake-word, configurable wake phrase (default: "Hey FinDog"). Verify on-device-only processing and licensing compliance; no audio leaves the device for wake-word detection.
 
 **Security & Compliance:**
 - **Firebase Region:** europe-west1 (Belgium) for Firestore, Storage, Functions—GDPR/DSGVO compliance
 - **Authentication:** Firebase Auth email/password for MVP; add OAuth (Google) post-MVP
-- **Data Isolation:** Firestore Security Rules enforce membership-based authorization: access to `/tenants/{tenantId}/**` requires membership at `/tenants/{tenantId}/members/{request.auth.uid}`; privileges gate reads/writes
+- **Data Isolation:** Firestore Security Rules enforce membership-based authorization: access to `/tenants/{tenantId}/**` requires membership at `/tenants/{tenantId}/members/{request.auth.uid}`; roles gate reads/writes
 - **GDPR Right-to-Erasure:** Cloud Function implements cascade delete of tenant data including audit logs
 
 **Dependency Management:**
@@ -373,7 +381,7 @@ FinDogAI prioritizes a **voice-first, eyes-free interaction model** optimized fo
 
 **Deployment Pipeline:**
 - **Hosting:** Firebase Hosting for PWA
-- **Native Builds:** Capacitor CLI for iOS/Android builds (local dev), CI/CD via GitHub Actions (future)
+- **Native Builds:** Capacitor CLI for iOS/Android builds (local dev), CI/CD via GitHub Actions (future). Note: iOS builds require macOS/Xcode or a macOS CI runner.
 - **Functions:** Firebase CLI (`firebase deploy --only functions`)
 - **Database:** Firestore Security Rules deployed via Firebase CLI
 
@@ -391,8 +399,8 @@ FinDogAI prioritizes a **voice-first, eyes-free interaction model** optimized fo
 ### **Epic 4: Journey Tracking & Cost Management**
 **Goal:** Implement "Start Journey" voice flow and manual cost entry screens for all five categories (Transport, Material, Labor, Machine, Other), delivering complete cost capture functionality.
 
-### **Epic 5: Audit Logging & Team Privileges**
-**Goal:** Implement Cloud Functions audit triggers, basic team member privilege system, and compliance features (GDPR data deletion, audit log TTL cleanup).
+### **Epic 5: Audit Logging & Team Roles**
+**Goal:** Implement Cloud Functions audit triggers, basic role-based access control for team members, and compliance features (GDPR data deletion, audit log TTL cleanup).
 
 ### **Epic 6: Reporting, Export & MVP Polish**
 **Goal:** Add job financial summaries, offline sync status visibility, and final UX polish to deliver production-ready MVP; PDF generation is deferred to Phase 2.
@@ -475,7 +483,7 @@ FinDogAI prioritizes a **voice-first, eyes-free interaction model** optimized fo
 2. Form validation: email format, password strength (min 8 chars), required fields
 3. On successful registration, Firebase Auth user created
 4. On success, a new tenant is created at `/tenants/{tenantId}` (server-generated ID) with `createdBy: user.uid`, `createdAt`
-5. Membership document created at `/tenants/{tenantId}/members/{user.uid}` with `{ owner: true, canAddCosts: true, canViewFinancials: true }`
+5. Membership document created at `/tenants/{tenantId}/members/{user.uid}` with `{ role: 'owner', status: 'active' }`
 6. Index document created at `/user_tenants/{user.uid}/memberships/{tenantId}` for listing/selecting tenants (read-only; maintained by Cloud Functions)
 7. Initial profile docs created under `/tenants/{tenantId}`: `personProfile` (displayName, email, language: cs, aiSupportEnabled: true, createdAt) and `businessProfile` (currency: CZK, vatRate: 21%, distanceUnit: km, createdAt); create team member resource `teamMembers/{teamMemberId}` for the owner with `teamMemberNumber: 1`, `authUserId: user.uid`, `name: displayName`
 8. Success message displayed: "Welcome, [displayName]! Your account is ready."
@@ -495,7 +503,7 @@ FinDogAI prioritizes a **voice-first, eyes-free interaction model** optimized fo
    - If a mapping exists at `user_tenants/{uid}` OR an index exists at `/user_tenants/{uid}/memberships/{tenantId}`, return the existing `tenantId`.
    - If none exists, atomically create:
      - `/tenants/{tenantId}` with `createdBy: uid`, `createdAt`
-     - `/tenants/{tenantId}/members/{uid}` with `{ owner: true, canAddCosts: true, canViewFinancials: true }`
+     - `/tenants/{tenantId}/members/{uid}` with `{ role: 'owner', status: 'active' }`
      - `/user_tenants/{uid}/memberships/{tenantId}` (read-only index for listing/selecting tenants)
      - `user_tenants/{uid}` with `{ tenantId, createdAt }`
 3. Idempotency: Safe to call repeatedly without creating duplicates; concurrent calls do not create multiple tenants.
@@ -546,9 +554,13 @@ FinDogAI prioritizes a **voice-first, eyes-free interaction model** optimized fo
 **Acceptance Criteria:**
 
 1. Security Rules file `firestore.rules` created
-2. Rule: Users can access `/tenants/{tenantId}/**` only if a membership exists at `/tenants/{tenantId}/members/{request.auth.uid}`; writes to cost-related entities require `member.canAddCosts == true`; reads of financial fields require `member.canViewFinancials == true`
+2. Rule: Users can access `/tenants/{tenantId}/**` only if a membership exists at `/tenants/{tenantId}/members/{request.auth.uid}`; authorization is role-based:
+   - owner: full read/write
+   - representative: jobs read-only; no audit_logs read; no exports
+   - teamMember: read of jobs via public fields only (jobNumber, title; active jobs only); no advances read; no resources write; no exports; may create/update/delete costs
+2a. Rule: Team member job reads use sanitized collection `/tenants/{tenantId}/jobs_public/{jobId}` (fields: jobNumber, title, status); allow read only when `member(t).role == 'teamMember' && resource.data.status == 'active'`.
 3. Rule: Unauthenticated users have no read/write access (except public collections if needed in future)
-4. Rule: Audit logs (`/tenants/{tenantId}/audit_logs/{logId}`) are Cloud Functions–only (client cannot read or write)
+4. Rule: Audit logs (`/tenants/{tenantId}/audit_logs/{logId}`) are readable in-app by owner only; representative and team member have no read access. Writes occur only via Cloud Functions triggers; no client writes.
 5. Rules deployed to Firebase via `firebase deploy --only firestore:rules`
 6. Manual testing: User A cannot read User B's jobs (returns permission denied)
 7. Manual testing: Unauthenticated request to Firestore returns permission denied
@@ -583,13 +595,13 @@ FinDogAI prioritizes a **voice-first, eyes-free interaction model** optimized fo
 ### Story 1.7: Tenant Invitations (Owner)
 
 **As a** business owner,
-**I want** to invite team members with specific privileges,
+**I want** to invite team members with specific roles,
 **so that** they can securely join my tenant and collaborate.
 
 **Acceptance Criteria:**
 
-1. "Invite Member" dialog available from Team Members screen with fields: Email (optional), Privileges: canAddCosts (toggle), canViewFinancials (toggle)
-2. On "Create Invite", an HTTPS callable Cloud Function creates `/tenants/{tenantId}/invites/{inviteId}` with: `codeHash` (hashed server-side), `expiresAt` (TTL ≥72h), `createdBy`, `presetPrivileges`, `status: pending`
+1. "Invite Member" dialog available from Team Members screen with fields: Email (optional), Role: representative | teamMember
+2. On "Create Invite", an HTTPS callable Cloud Function creates `/tenants/{tenantId}/invites/{inviteId}` with: `codeHash` (hashed server-side), `expiresAt` (TTL ≥72h), `createdBy`, `presetRole`, `status: pending`
 3. Function returns a single-use invite code/link; code itself is not stored in Firestore (only hash)
 4. Invites list shows pending/consumed/expired with basic metadata; owners can revoke (delete) pending invites
 5. Cloud Function protected by App Check and rate limiting
@@ -604,8 +616,8 @@ FinDogAI prioritizes a **voice-first, eyes-free interaction model** optimized fo
 **Acceptance Criteria:**
 
 1. Onboarding flow supports "Join a team" with invite code/link input
-2. HTTPS callable `redeemInvite(code)` validates `codeHash`, TTL, single-use, and optional email binding; on success it:
-   - Creates membership at `/tenants/{tenantId}/members/{uid}` with the preset privileges
+2. HTTPS callable `redeemInvite(code)` validates `codeHash`, TTL, single-use, and optional email binding, and is protected by App Check and rate limiting; on success it:
+   - Creates membership at `/tenants/{tenantId}/members/{uid}` with the preset role
    - Creates index at `/user_tenants/{uid}/memberships/{tenantId}` (read-only; maintained by Functions)
    - Creates team member resource at `/tenants/{tenantId}/teamMembers/{teamMemberId}` with `teamMemberNumber` allocated via `allocateSequence` (HTTPS callable if online; onCreate trigger if offline) and `authUserId: uid`
 3. On success, app switches to the joined tenant and displays confirmation
@@ -676,22 +688,22 @@ FinDogAI prioritizes a **voice-first, eyes-free interaction model** optimized fo
 9. Empty state: "No machines yet. Add equipment to track machine labor costs."
 10. Machine deletion shows confirmation: "Delete [machineNumber] Name? This cannot be undone."
 
-### Story 2.4: Team Members Management with Privilege Toggles
+### Story 2.4: Team Members Management with Roles
 
 **As a** business owner,
-**I want** to manage team members and assign individual privileges,
+**I want** to manage team members and assign roles,
 **so that** I can control who can add costs and view financial details.
 
 **Acceptance Criteria:**
 
 1. Resources Management screen has "Team Members" tab
-2. Team members list displays: `[teamMemberNumber] Name - Rate: X CZK/hour` with privilege badges (💰 Can Add Costs, 👁️ Can View Financials)
+2. Team members list displays: `[teamMemberNumber] Name - Rate: X CZK/hour` with role badge (Owner | Representative | Team Member)
 3. Registering user auto-created as team member #1 (resource) and as an owner membership (from Story 1.3) — this is the business owner
 4. "Add Team Member" opens an "Invite Member" dialog
-5. Invite form fields: email (optional), privilege toggles: canAddCosts (toggle), canViewFinancials (toggle); after the invite is redeemed, the owner can set name/hourlyRate on the team member resource
+5. Invite form fields: email (optional), role select: representative | teamMember; after the invite is redeemed, the owner can set name/hourlyRate on the team member resource
 6. On "Create Invite", a Cloud Function creates `/tenants/{tenantId}/invites/{inviteId}` and returns a single-use code/link (TTL; single-use)
-7. Upon invite redemption, membership is created at `/tenants/{tenantId}/members/{uid}` with selected privileges; a team member resource is created at `/tenants/{tenantId}/teamMembers/{teamMemberId}` with `teamMemberNumber` and `authUserId: uid`
-8. Edit team member updates: name, hourlyRate, updatedAt, updatedBy (privileges are managed on the membership and editable by owners only; team member #1 cannot change their owner status)
+7. Upon invite redemption, membership is created at `/tenants/{tenantId}/members/{uid}` with selected role and `status: 'active'`; a team member resource is created at `/tenants/{tenantId}/teamMembers/{teamMemberId}` with `teamMemberNumber` and `authUserId: uid`
+8. Edit team member updates: name, hourlyRate, updatedAt, updatedBy (role is managed on the membership and editable by owners only; team member #1 cannot change their owner status)
 9. Delete team member removes the resource document; membership removal is a separate owner-only action (not implied by resource deletion)
 10. **Owner protection:** Team member #1 cannot be deleted - delete button hidden/disabled with tooltip: "Business owner (Member #1) cannot be deleted"
 11. Non-owner team member deletion shows confirmation: "Delete [teamMemberNumber] Name? This cannot be undone."
@@ -830,7 +842,7 @@ FinDogAI prioritizes a **voice-first, eyes-free interaction model** optimized fo
 4. jobIdentifier can be: numeric jobNumber ("123"), partial job title ("Smith"), or full title ("Smith, Brno")
 5. If jobIdentifier is numeric, query Firestore for job with matching jobNumber
 6. If jobIdentifier is text, query Firestore for job with title containing text (case-insensitive, partial match)
-7. If multiple jobs match, return first active job (sorted by jobNumber)
+7. If multiple jobs match (by partial title), require disambiguation: TTS lists top 2–3 candidates or prompt for job number; only auto-select when an exact numeric jobNumber is provided.
 8. If no job matches, return error: "Job not found. Please say job number or title."
 9. Intent recognition latency target: <1 second for LLM response
 10. Mock mode returns hardcoded intent: `{intent: "SetActiveJob", entities: {jobIdentifier: "123"}}`
@@ -911,7 +923,7 @@ FinDogAI prioritizes a **voice-first, eyes-free interaction model** optimized fo
 9. **Missing Required Entities:** If LLM parses intent but missing critical entity (e.g., `AddMaterialCost` without `amount`), prompt: "Please say the amount." and re-activate microphone for additional input
 10. **Accent/Pronunciation Issues:** If STT consistently fails for specific user, provide feedback: "Having trouble? Try speaking more slowly or use manual entry." after 3 consecutive failures
 11. **All Error States:** Include "Switch to Manual Entry" button that dismisses voice modal and opens corresponding manual form (pre-filled with any successfully parsed data)
-12. **Error Logging:** All voice errors logged to audit logs with: timestamp, error type, transcription (if available), intent (if available), user action (Retry/Manual/Cancel)
+12. **Error Logging:** Log minimal metadata only (timestamp, error category/code, non-PII context, user action). Do not store raw transcriptions or intent text in audit logs.
 13. **Mock Mode:** Errors can be simulated via developer settings (e.g., force STT timeout, force low confidence, force write failure) for testing
 14. **Offline Production:** Voice disabled entirely; attempting to tap microphone shows: "Voice features require internet connection. Use manual entry." with link to manual form
 
@@ -1010,12 +1022,12 @@ Select 1-9 or just type your question/feedback:
 
 1. User taps microphone button, says: "I'm going to Brno in Transporter, odometer 12345" (or Czech: "Jedu do Brna v Transporteru, kilometr 12345")
 2. STT transcribes → LLM parses → Vehicle queried → TTS confirms
-3. Voice Confirmation Modal displays: "✓ Journey to **Brno** | Vehicle: **[1] Transporter** | Odometer: **12,345 km**"
+3. Voice Confirmation Modal displays: "✓ Journey to **Brno** | Vehicle: **[1] Transporter** | Odometer: **12,345 [unit]**" (unit label from businessProfile)
 4. TTS plays: "Starting journey to Brno in Transporter, odometer one two three four five. Say 'yes' to confirm or 'no' to retry."
 5. User responds "yes" (voice) OR taps Accept button → Journey event created under targeted job (inline override if present, else Active Job) at `/tenants/{tenantId}/jobs/{jobId}/events/{eventId}`
 6. Event document: ordinalNumber (sequence), type: "journey_start", timestamp (now), data: {destination, vehicle: {full vehicle object copy}, odometerStart: 12345, odometerEnd: null, calculatedDistance: null, calculatedCost: null}, createdAt, createdBy (current team member ID)
 7. Success message (toast): "Journey to Brno started" (in user's language)
-8. Journey event displayed in Job Detail → Events timeline: "[ordinalNumber] Journey to Brno - Transporter - 12,345 km"
+8. Journey event displayed in Job Detail → Events timeline: "[ordinalNumber] Journey to Brno - Transporter - 12,345 [unit]" (unit label from businessProfile)
 9. Offline development mode only: mock pipeline saves event locally; in production offline, voice interactions are disabled (no recording); manual Start Journey entry remains available.
 10. End-to-end flow completes in <10 seconds on 4G
 11. Error handling: "No vehicles found. Add a vehicle in settings first."
@@ -1042,13 +1054,13 @@ Select 1-9 or just type your question/feedback:
 5. **Manual Amount Mode:** Amount (number with currency), Distance field hidden, Vehicle still required
 6. On save, cost created in `/tenants/{tenantId}/jobs/{jobId}/costs/{costId}` where jobId is the current job context
 7. Cost document: ordinalNumber (sequence), category: "transport", amount, vehicle: {full vehicle object copy with vehicleNumber, name, distanceUnit, ratePerDistanceUnit}, distance (null if manual amount mode), description, timestamp, createdAt, createdBy
-8. Cost displayed in Job Detail → Costs tab: "[ordinalNumber] Transport - [vehicleNumber] Vehicle Name - X km - Y CZK" (or "- Y CZK" if distance is null)
+8. Cost displayed in Job Detail → Costs tab: "[ordinalNumber] Transport - [vehicleNumber] Vehicle Name - X [unit] - Y CZK" (or "- Y CZK" if distance is null; unit label from businessProfile)
 9. Edit cost: Tap cost item → opens form pre-filled with original mode (distance/manual), allows updates to distance/amount/description/vehicle, job context remains unchanged
 10. Delete cost: Swipe left or long-press → confirmation: "Delete cost [ordinalNumber]?" → removes from Firestore
 11. Job financial summary updates: Total costs recalculated, budget remaining updated
 12. Offline mode: Cost CRUD works without network, syncs when online
 13. Validation: If Distance Mode, distance must be positive number and vehicle must be selected; if Manual Amount Mode, amount must be positive number and vehicle must be selected
-14. **Use case clarification:** Distance Mode allows user to enter "I drove 50 km today" (without odometer readings), system calculates cost from vehicle rate
+14. **Use case clarification:** Distance Mode allows user to enter "I drove 50 [unit] today" (without odometer readings); unit label from businessProfile; system calculates cost from vehicle rate
 
 ### Story 4.4: Manual Cost Entry - Material, Labor, Machine, Other Categories
 
@@ -1077,7 +1089,7 @@ Select 1-9 or just type your question/feedback:
 17. All categories support Edit (update amount/description/resource, mode preserved from creation, job context remains unchanged) and Delete (with confirmation)
 18. Job Detail → Costs tab displays costs grouped by category with sequential ordinalNumbers and totals per category
 19. Cost display shows calculated details when available: "Transport - 50 km - 250 CZK" vs "Transport - 250 CZK" (manual), "Material - 10 units × 5 CZK - 50 CZK" vs "Material - 50 CZK" (manual)
-20. Privilege enforcement: If current team member has `canAddCosts: false`, "Add Cost" button hidden/disabled
+20. Privilege enforcement: If membership.status != 'active', "Add Cost" button hidden/disabled
 
 ### Story 4.5: Advances Tracking
 
@@ -1097,7 +1109,7 @@ Select 1-9 or just type your question/feedback:
 8. Delete advance: Swipe left → confirmation: "Delete advance [ordinalNumber]?" → removes from Firestore
 9. Job Detail header displays financial summary: "Costs: X CZK | Advances: Y CZK | **Net Due: (X - Y) CZK**" (green if positive, red if negative)
 10. Net Due calculation updates in real-time as costs/advances added/removed
-11. Privilege enforcement: Advances visible only if `canViewFinancials: true`, otherwise tab hidden
+11. Privilege enforcement: Advances visible and editable to owner and owner’s representative; hidden for team member
 12. Offline mode: Advance CRUD works without network, syncs when online
 
 ### Story 4.6: Job Costs Summary & Category Breakdown
@@ -1117,7 +1129,7 @@ Select 1-9 or just type your question/feedback:
 7. Empty state per category: "No transport costs yet. Add or record via voice."
 8. Costs sortable by: Date (newest first - default), Amount (highest first), Category
 9. Search/filter: Text input filters costs by description/resource name
-10. Privilege enforcement: If `canViewFinancials: false`, costs list shows descriptions/dates but amounts are hidden: "Amount: ***"
+10. Privilege enforcement: Costs Summary (category totals and overall total) visible to owner and owner’s representative; team member sees the list of costs but not the summary section
 11. Export to CSV button (future enhancement - show disabled with tooltip: "Coming soon")
 12. Offline mode: Costs display from local cache, sync status indicator if pending writes
 
@@ -1138,7 +1150,7 @@ Select 1-9 or just type your question/feedback:
 6. TTS confirmation reads back: destination (if known), vehicle, end reading, calculated distance, and cost, ending with "Say 'yes' to confirm or 'no' to retry."; user responds via voice ("yes"/"no") or taps Accept/Retry/Cancel
 10. Inline override behavior: Saying "for job [id/name]" targets that job for this operation only and does not change the Active Job
 
-7. Error handling: Missing odometer → prompt; missing rate on vehicle → fallback to create distance-only cost with `amount: null` and banner "Set vehicle rate to price later"
+7. Error handling: Missing odometer → prompt; missing rate on vehicle → block completion and prompt to set vehicle rate on the selected vehicle (or choose another vehicle); after rate is set, retry End Journey.
 8. Offline: Voice disabled in production offline; manual End Journey remains available (enter end odometer in Events)
 9. Tests (mock providers): StartJourney then EndJourney → event updated and cost created; negative/zero distance handled; missing open journey shows error
 
@@ -1156,7 +1168,7 @@ Select 1-9 or just type your question/feedback:
 4. On Accept: Create cost under targeted job (inline override if present, else Active Job) with `category: "Material"`, fields: `amount`, optional `quantity`, `unitPrice`, `description`, `createdAt/By`, sequential `ordinalNumber`
 5. TTS confirmation summarizes parsed values: "Material, 10 × 200 = 2,000 CZK, 'plasterboard'. Say 'yes' to confirm or 'no' to retry."
 6. Validation: If parsed amount missing, prompt: "Please say amount"; if no Active Job and no inline job override specified, prompt: "Say job number or name, or set an Active Job first"
-7. Privileges: Requires `canAddCosts: true`; otherwise show "Permission denied"
+7. Privileges: Requires active membership (any role); otherwise show "Permission denied"
 8. Offline: Voice disabled in production offline; manual Material entry available in Story 4.4
 9. Tests: Variants with amount only, qty×price, with/without description; Czech phrases recognized
 10. Inline override behavior: Saying "for job [id/name]" targets that job for this operation only and does not change the Active Job
@@ -1182,7 +1194,7 @@ Select 1-9 or just type your question/feedback:
 12. Tests: Include inline job override scenario and verify Active Job remains unchanged
 
 6. Validation: Missing hours → prompt; unknown member → prompt to repeat or default to current user
-7. Privileges: Requires `canAddCosts: true`; amounts hidden in UI if current viewer lacks `canViewFinancials`
+7. Privileges: Requires active membership (any role); otherwise show "Permission denied"
 8. Offline: Voice disabled in production offline; manual Labor entry available in Story 4.4
 9. Tests: Current user default, specified member, with/without explicit rate; Czech command variants
 
@@ -1202,12 +1214,12 @@ Select 1-9 or just type your question/feedback:
 9. TTS readback includes the targeted job: "for job [number] [title]"
 10. Tests: Include inline job override scenario and verify Active Job remains unchanged
 
-5. Privileges: Requires `canAddCosts: true`; viewers without `canViewFinancials` see description but amounts masked
+5. Privileges: Requires active membership (any role); amounts are visible to all roles
 6. Offline: Voice disabled in production offline; manual Other entry available in Story 4.4
-7. Tests: Amount only, amount + note; verify amounts masked for restricted viewers
+7. Tests: Amount only, amount + note; for teamMember role verify Costs Summary is hidden (but cost amounts remain visible)
 
 
-## Epic 5: Audit Logging & Team Privileges
+## Epic 5: Audit Logging & Team Roles
 
 **Expanded Goal:** Implement Cloud Functions audit triggers (onCreate/onUpdate/onDelete) for all collections, scheduled TTL cleanup function, and enforce team member privilege checks in UI and Security Rules. This epic delivers compliance features and multi-user access control, preparing the MVP for team use and regulatory requirements.
 
@@ -1278,17 +1290,17 @@ Select 1-9 or just type your question/feedback:
 
 **Acceptance Criteria:**
 
-1. On app init, load membership at `/tenants/{tenantId}/members/{currentUser.uid}` (privileges), and load the team member resource from `/tenants/{tenantId}/teamMembers` where `authUserId == currentUser.uid` for display
-2. Store privileges (`canAddCosts`, `canViewFinancials`) in app state (NgRx/Signals) for reactive UI updates
-3. **canAddCosts = false:** Hide/disable "Add Cost" button, "Add Advance" button, voice microphone button (costs-related commands)
-4. **canAddCosts = false:** Cost/Advance edit/delete buttons hidden in lists
-5. **canViewFinancials = false:** Job financial summary shows "Budget: ***", "Costs: ***", "Net Due: ***" (amounts hidden)
-6. **canViewFinancials = false:** Costs tab displays cost descriptions/dates but amounts replaced with "***"
-7. **canViewFinancials = false:** Advances tab entirely hidden (not just amounts)
-8. **canViewFinancials = false:** Job budget field hidden in job creation/edit forms
+1. On app init, load membership at `/tenants/{tenantId}/members/{currentUser.uid}` (role, status), and load the team member resource from `/tenants/{tenantId}/teamMembers` where `authUserId == currentUser.uid` for display
+2. Store role and status in app state (NgRx/Signals) for reactive UI updates
+3. **membership.status != 'active':** Hide/disable "Add Cost" button, "Add Advance" button, voice microphone button (costs-related commands)
+4. **membership.status != 'active':** Cost/Advance edit/delete buttons hidden in lists
+5. **role = teamMember:** Job financial summary hidden (display placeholders like "Budget: —", "Costs: —", "Net Due: —")
+6. **role = teamMember:** Costs tab displays normally (descriptions/dates/amounts); only the "Costs Summary" section is hidden
+7. **role = teamMember:** Advances tab hidden; **role = representative:** Advances tab visible (create/edit/delete enabled)
+8. **role = teamMember:** Job budget field hidden in job creation/edit forms; **role = representative:** Jobs are read-only (no edits), including budget
 9. Privilege tooltips: When feature disabled, tooltip explains: "Your account doesn't have permission to add costs. Contact business owner."
-10. Privilege checks reactive: If business owner updates team member privileges, affected user's UI updates on next app data refresh (within 1 minute or on manual refresh)
-11. Team member #1 (owner) always has full privileges regardless of database values
+10. Role-based access checks are reactive: If business owner updates a member's role or status, affected user's UI updates on next app data refresh (within 1 minute or on manual refresh)
+11. Team member #1 (owner) always has full access regardless of database values
 12. If no team member record found for current user, default to no privileges (safety fallback)
 
 ### Story 5.5: Firestore Security Rules for Privilege Enforcement
@@ -1301,16 +1313,53 @@ Select 1-9 or just type your question/feedback:
 
 1. Security Rules updated to load membership document for the request.auth user
 2. Rule helper: `function member(t) { return get(/databases/$(database)/documents/tenants/$(t)/members/$(request.auth.uid)).data }`
-3. **Write access to costs/advances:** `allow create, update, delete: if member(t).canAddCosts == true`
-4. **Read access to financial fields:** Costs/advances readable only if `member(t).canViewFinancials == true` OR operations are non-financial (descriptions/dates)
-5. **Owner bypass:** `allow read, write: if member(t).owner == true` (owner always has access)
-6. **Job budget field protection:** Job writes that change `budget` field require `canViewFinancials == true`
-7. Security Rules tested via emulator with multiple test users (owner, restricted user, no-privilege user)
-8. Test: User with `canAddCosts: false` attempting to create cost → permission denied
-9. Test: User with `canViewFinancials: false` attempting to read advance → permission denied (or sanitized response)
+3. **Write access to costs:** `allow create, update, delete: if member(t).status == 'active'`
+4. **Read/write access to advances:** `allow read, create, update, delete: if member(t).role in ['owner','representative'] && member(t).status == 'active'`
+5. **Owner bypass:** `allow read, write: if member(t).role == 'owner'` (owner always has access)
+6. **Job writes (incl. budget):** `allow update, delete: if member(t).role == 'owner'` (representative and teamMember cannot modify jobs)
+7. Security Rules tested via emulator with multiple test users (owner, representative, teamMember, disabled)
+8. Test: User with `status != 'active'` attempting to create cost → permission denied
+9. Test: User with `role = teamMember` attempting to read advance → permission denied
 10. Rules deployed: `firebase deploy --only firestore:rules`
-11. Production validation: Create test user with restricted privileges, verify API calls respect rules
+11. Production validation: Create test user with restricted role or disabled status, verify API calls respect rules
 12. Rules commented explaining privilege logic for future maintainers
+
+### Story 5.6: Audit Log Viewer (Owner-only)
+
+**As a** business owner,
+**I want** to review audit logs to see who changed what and when,
+**so that** I can verify changes and diagnose issues quickly.
+
+**Acceptance Criteria:**
+
+1. Navigation: Entry point in Tenant menu (e.g., Settings › Admin › Audit Logs) is visible only to the owner; representative and teamMember do not see it.
+2. Route: `/audit-logs` (tenant-scoped) with breadcrumb showing tenant name.
+3. Data source: Read from `/tenants/{tenantId}/audit_logs` ordered by `timestamp` desc; queries use `limit` (default 50) and support pagination (infinite scroll or "Load more").
+4. List item fields: Timestamp (localized), Operation badge (CREATE/UPDATE/DELETE), Collection, Document ID, Author (resolved to teamMemberNumber + name when possible; fallback to authorId), and a "View" action.
+5. Filters: Quick date ranges (Today, Last 7 days, Last 30 days, Custom), Collection (Jobs, Costs, Vehicles, Machines, TeamMembers, Advances, Events), Operation (CREATE/UPDATE/DELETE), Author, and free-text search (Document ID contains).
+6. Empty state: "No audit log entries for the selected filters."
+7. Permissions: Only owner can open the page. If a non-owner navigates directly (deep link), show 403-style message: "You don't have permission to view audit logs" with a Back button.
+8. Offline handling: Viewer disabled offline with banner: "Requires internet connection"; no cached audit log data is shown.
+9. Detail view (drawer or modal) opens on "View":
+   - CREATE → show "After" snapshot (formatted JSON) with copy-to-clipboard
+   - UPDATE → show side-by-side "Before" vs "After" with inline diff highlighting; changed fields expanded by default
+   - DELETE → show "Before" snapshot (deleted document), "After: —"
+10. Deep link: If the referenced entity still exists, show "Open [Collection] › [#number Title/Name]" button to navigate to that screen; hide when not applicable.
+11. PII limits: No voice transcripts or AI intermediate artifacts are displayed (not logged per FR8); only entity snapshots/metadata appear.
+12. Export: No export/download from this view (per FR23, audit logs are excluded from exports).
+13. Performance: First paint ≤1.5s on broadband for initial 50 items; diff rendering remains responsive for typical documents (<10 KB each).
+14. Accessibility: Keyboard navigable; operation badges have accessible labels; timestamps include human-readable and absolute formats (tooltip).
+15. Telemetry (optional): Log viewer opens and filter changes for diagnostics only (no PII).
+16. Testing:
+   - Create/Update/Delete a Job → entries appear with correct metadata
+   - UPDATE shows only changed fields highlighted in diff
+   - Representative/teamMember denied access (UI hidden + direct-route guard shows 403 message)
+   - Date/collection/operation filters narrow results correctly; pagination appends more entries
+
+**Security Rules alignment:**
+- Reads: `allow read: if member(t).role == 'owner'`
+- Writes: none from client; audit logs are created exclusively by Cloud Functions triggers
+- Queries must include `orderBy('timestamp','desc')` and `limit` on the client for performance
 
 ---
 
@@ -1344,7 +1393,7 @@ Select 1-9 or just type your question/feedback:
 9. Function execution time: <5 seconds for typical job (<100 costs)
 10. Error handling: If function fails, show: "PDF generation failed. Try again later."
 11. Offline mode: "Export PDF" button disabled with tooltip: "Requires internet connection"
-12. PDF respects privileges: If `canViewFinancials: false`, amounts in PDF are hidden/sanitized (unlikely scenario for PDF export, but safeguarded)
+12. PDF export is owner-only (button only visible to owner)
 
 ### Story 6.2: Offline Sync Status Visibility
 
@@ -1393,7 +1442,7 @@ Select 1-9 or just type your question/feedback:
    - Offline create with placeholder number receives a proper sequential number on sync with no duplicates; UI updates from '—' to assigned number
    - Create 10 jobs offline, sync with 3 failures (e.g., permission denied); verify 7 succeed, 3 appear in Sync Issues with Retry option
 9. No data loss: Pending writes persist across app restarts; sync queue is durable (Firestore offline persistence handles this)
-10. Owner override: If a non-owner user's offline write fails due to privilege changes (e.g., canAddCosts revoked while offline), Sync Issues shows "Permission denied" with explanation; user can contact owner to restore privileges or discard the change
+10. Owner override: If a non-owner user's offline write fails due to role/status changes (e.g., membership disabled while offline), Sync Issues shows "Permission denied" with explanation; user can contact owner to restore access or discard the change
 
 ### Story 6.4: UI Polish - Loading States & Skeleton Screens
 
@@ -1455,7 +1504,7 @@ Select 1-9 or just type your question/feedback:
 
 3. **Offline Testing:** Airplane mode scenarios validated: Create job/cost offline → sync on reconnection → verify data on second device
 4. **Multi-Device Sync:** Same tenant logged in on phone + tablet → changes on one device appear on other within 10 seconds
-5. **Privilege Enforcement:** Test user with restricted privileges cannot access financial data or add costs (UI + API)
+5. **Role/Access Enforcement:** Test user with restricted role or disabled status cannot access financial data or add costs (UI + API)
 6. **Security Rules:** Attempt cross-tenant data access (User A tries to read User B's jobs) → permission denied
 7. **Performance:** Lighthouse audit scores: Performance >80, Accessibility >90, Best Practices >90, SEO >80
 8. **PWA Requirements:** App installable, works offline, has app manifest and service worker (Firebase Hosting handles this)
@@ -1501,7 +1550,7 @@ Select 1-9 or just type your question/feedback:
 
 **Phasing & MVP Scope (6 months, 1–2 devs):** MVP includes Epics 1–4 plus essential slices of Epics 5 and 6 (5.1 audit triggers, 5.5 Security Rules; 6.2 offline sync status, 6.3 conflict resolution, 6.6 final QA).
 
-Phase 2 includes: advanced privileges (#12 expansion), OAuth (beyond email/password), PDF generation (Issue #11), invoicing/billing integration, deeper UI polish, approval workflows for large expenses, and job-specific/time-bound permissions.
+Phase 2 includes: advanced permissions (beyond MVP roles), OAuth (beyond email/password), PDF generation (Issue #11), invoicing/billing integration, deeper UI polish, approval workflows for large expenses, and job-specific/time-bound permissions.
 
 **Next steps:**
 1. Execute PM Checklist
