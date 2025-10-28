@@ -1802,9 +1802,9 @@ export const appConfig: ApplicationConfig = {
   --spacing-2xl: 3rem;    /* 48px */
   --spacing-3xl: 4rem;    /* 64px */
 
-  /* ===== Touch Targets (Glove-Friendly) ===== */
+  /* ===== Touch Targets (Accessible) ===== */
   --touch-target-min: 48px;         /* Minimum touch target */
-  --touch-target-comfortable: 56px;  /* Comfortable for gloves */
+  --touch-target-comfortable: 56px;  /* Comfortable for field work */
   --touch-target-large: 64px;       /* Extra large for critical actions */
 
   /* ===== Border Radius ===== */
@@ -2015,7 +2015,7 @@ export const appConfig: ApplicationConfig = {
 - Consistent spacing/sizing across app
 - Easy white-labeling for future clients
 
-**Glove-Friendly Touch Targets:**
+**Touch-Friendly Targets:**
 - Minimum 48px targets (Material Design guideline)
 - Comfortable 56px for primary actions
 - Large 64px for critical voice/safety actions
@@ -2395,16 +2395,16 @@ test.describe('Job Creation Flow', () => {
     await expect(page.locator('.sync-indicator')).toBeHidden({ timeout: 5000 });
   });
 
-  test('should handle glove interaction', async ({ page }) => {
-    // Simulate touch with larger area (glove simulation)
+  test('should handle imprecise touch interaction', async ({ page }) => {
+    // Simulate touch with larger area for field work conditions
     const button = page.locator('[data-testid="voice-command-button"]');
     const box = await button.boundingBox();
 
-    // Verify button is large enough for glove use
+    // Verify button meets minimum touch target size
     expect(box?.width).toBeGreaterThanOrEqual(56); // min touch target
     expect(box?.height).toBeGreaterThanOrEqual(56);
 
-    // Tap with offset to simulate imprecise glove tap
+    // Tap with offset to simulate imprecise tap in challenging conditions
     await button.tap({ position: { x: 10, y: 10 } });
 
     // Verify action still triggered
@@ -2496,7 +2496,7 @@ test.describe('Job Creation Flow', () => {
 **Focus Areas:**
 - Offline/online transitions (critical for field use)
 - Voice command accuracy
-- Glove-friendly interactions
+- Touch-friendly interactions for challenging conditions
 - State synchronization
 
 ## Environment Configuration
