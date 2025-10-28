@@ -4,6 +4,24 @@
 
 The FinDogAI application is built with an offline-first architecture, ensuring full functionality without internet connectivity. This is critical for field workers who may operate in areas with poor or no network coverage.
 
+## User Identity in Offline Operations
+
+All documents that are created or modified (both online and offline) must include compound identity objects for audit tracking:
+
+```typescript
+// Compound identity object for multi-tenant user attribution
+export interface UserIdentity {
+  uid: string;              // Firebase Auth UID for security checks
+  memberNumber: number;     // Tenant-specific identifier (voice-friendly)
+  displayName: string;      // Cached display name for audit display
+}
+```
+
+When creating or updating documents offline, the application must:
+1. Retrieve the cached user identity from auth state (loaded at login)
+2. Include the full compound identity object in `createdBy` and `updatedBy` fields
+3. Ensure the identity is preserved through the sync queue when the operation is replayed online
+
 ## Network Status Service
 
 The Network Status Service monitors the application's connectivity status and provides real-time updates.
@@ -227,7 +245,7 @@ export class FirestoreSyncService {
    * - Automatic retry with exponential backoff for transient failures
    */
 
-  async updateDocument(path: string, data: any): Promise<void> {
+  async updateDocument(path: string, data: any, userIdentity: UserIdentity): Promise<void> {
     const docRef = doc(this.firestore, path);
 
     // Firestore automatically handles conflicts with last-write-wins
@@ -235,6 +253,7 @@ export class FirestoreSyncService {
     await setDoc(docRef, {
       ...data,
       updatedAt: serverTimestamp(), // Server timestamp for ordering
+      updatedBy: userIdentity,      // Compound identity for audit trail
       // Firestore's offline persistence handles the queue
       // When online, changes are synchronized automatically
       // Conflicts resolved by server timestamp (last write wins)
@@ -242,7 +261,11 @@ export class FirestoreSyncService {
   }
 
   // For operations requiring strict consistency, use transactions
-  async updateWithTransaction(path: string, updateFn: (data: any) => any): Promise<void> {
+  async updateWithTransaction(
+    path: string,
+    updateFn: (data: any) => any,
+    userIdentity: UserIdentity
+  ): Promise<void> {
     const docRef = doc(this.firestore, path);
 
     return runTransaction(this.firestore, async (transaction) => {
@@ -254,7 +277,8 @@ export class FirestoreSyncService {
       const newData = updateFn(doc.data());
       transaction.update(docRef, {
         ...newData,
-        updatedAt: serverTimestamp()
+        updatedAt: serverTimestamp(),
+        updatedBy: userIdentity  // Include compound identity
       });
     });
   }
@@ -408,20 +432,42 @@ export class SyncStatusComponent {
 ### Pattern for Optimistic Updates
 
 ```typescript
-// Example: Optimistic job update
+// Example: Optimistic job update with compound identity
 export class JobDetailComponent {
   private readonly store = inject(Store);
+  private readonly authState$ = this.store.select(selectAuthState);
 
   protected updateJob(id: string, changes: Partial<Job>): void {
-    // 1. Immediately update UI (optimistic)
-    this.store.dispatch(JobsActions.updateJobOptimistic({ id, changes }));
+    // Get current user identity from auth state
+    this.authState$.pipe(take(1)).subscribe(authState => {
+      if (!authState.user?.identity) {
+        console.error('User identity not available');
+        return;
+      }
 
-    // 2. Attempt to sync with backend
-    this.store.dispatch(JobsActions.updateJob({ id, changes }));
+      // Include updatedBy in the changes
+      const changesWithIdentity = {
+        ...changes,
+        updatedBy: authState.user.identity,
+        updatedAt: Timestamp.now() // Will be replaced by serverTimestamp
+      };
 
-    // 3. Effects handle success/failure
-    // - Success: Mark as synced
-    // - Failure: Rollback or mark as error
+      // 1. Immediately update UI (optimistic)
+      this.store.dispatch(JobsActions.updateJobOptimistic({
+        id,
+        changes: changesWithIdentity
+      }));
+
+      // 2. Attempt to sync with backend
+      this.store.dispatch(JobsActions.updateJob({
+        id,
+        changes: changesWithIdentity
+      }));
+
+      // 3. Effects handle success/failure
+      // - Success: Mark as synced
+      // - Failure: Rollback or mark as error
+    });
   }
 }
 ```
@@ -469,8 +515,10 @@ export class OfflineTestHelper {
 
 ### 3. Data Management
 - Queue all mutations when offline
+- Include compound identity objects in all create/update operations
+- Preserve user identity through sync queue operations
 - Retry failed operations
-- Handle conflicts gracefully
+- Handle conflicts gracefully (last-write-wins based on server timestamp)
 
 ### 4. Performance
 - Minimize sync operations

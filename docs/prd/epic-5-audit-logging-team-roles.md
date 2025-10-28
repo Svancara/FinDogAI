@@ -11,7 +11,7 @@
 **Acceptance Criteria:**
 
 1. Cloud Function `onJobCreate` triggers on `/tenants/{tenantId}/jobs/{jobId}` onCreate
-2. Function writes to `/tenants/{tenantId}/audit_logs/{logId}` with: operation: "CREATE", collection: "jobs", documentId: jobId, tenantId, timestamp (server time), authorId (from job.createdBy), after: {full job document}, ttl: (timestamp + 1 year)
+2. Function writes to `/tenants/{tenantId}/audit_logs/{logId}` with: operation: "CREATE", collection: "jobs", documentId: jobId, tenantId, timestamp (server time), author: {compound identity object from job.createdBy}, after: {full job document}, ttl: (timestamp + 1 year)
 3. Cloud Function `onJobUpdate` triggers on `/tenants/{tenantId}/jobs/{jobId}` onUpdate
 4. Function writes audit log with: operation: "UPDATE", before: {old job document}, after: {new job document}
 5. Cloud Function `onJobDelete` triggers on `/tenants/{tenantId}/jobs/{jobId}` onDelete
@@ -35,7 +35,7 @@
 2. Cloud Functions created for Machines: `onMachineCreate`, `onMachineUpdate`, `onMachineDelete` on `/tenants/{tenantId}/machines/{machineId}`
 3. Cloud Functions created for TeamMembers: `onTeamMemberCreate`, `onTeamMemberUpdate`, `onTeamMemberDelete` on `/tenants/{tenantId}/teamMembers/{teamMemberId}`
 4. Cloud Functions created for Advances: `onAdvanceCreate`, `onAdvanceUpdate`, `onAdvanceDelete` on `/tenants/{tenantId}/jobs/{jobId}/advances/{advanceId}`
-5. All triggers follow same pattern as Story 5.1: operation, collection, documentId, tenantId, timestamp, authorId, before/after, ttl
+5. All triggers follow same pattern as Story 5.1: operation, collection, documentId, tenantId, timestamp, author (compound identity object), before/after, ttl
 6. Subcollections (costs, advances, events) include parent context in audit log: jobId field for traceability
 7. Triggers deployed and tested in emulator: Create/update/delete vehicle → audit log entry created
 8. Production deployment: All triggers live and logging operations
@@ -114,7 +114,7 @@
 1. Navigation: Entry point in Tenant menu (e.g., Settings › Admin › Audit Logs) is visible only to the owner; representative and teamMember do not see it.
 2. Route: `/audit-logs` (tenant-scoped) with breadcrumb showing tenant name.
 3. Data source: Read from `/tenants/{tenantId}/audit_logs` ordered by `timestamp` desc; queries use `limit` (default 50) and support pagination (infinite scroll or "Load more").
-4. List item fields: Timestamp (localized), Operation badge (CREATE/UPDATE/DELETE), Collection, Document ID, Author (resolved to teamMemberNumber + name when possible; fallback to authorId), and a "View" action.
+4. List item fields: Timestamp (localized), Operation badge (CREATE/UPDATE/DELETE), Collection, Document ID, Author (display as "[memberNumber] displayName" from author compound identity object; fallback to author.uid if memberNumber/displayName missing), and a "View" action.
 5. Filters: Quick date ranges (Today, Last 7 days, Last 30 days, Custom), Collection (Jobs, Costs, Vehicles, Machines, TeamMembers, Advances, Events), Operation (CREATE/UPDATE/DELETE), Author, and free-text search (Document ID contains).
 6. Empty state: "No audit log entries for the selected filters."
 7. Permissions: Only owner can open the page. If a non-owner navigates directly (deep link), show 403-style message: "You don't have permission to view audit logs" with a Back button.

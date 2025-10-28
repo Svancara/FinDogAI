@@ -26,6 +26,13 @@ export type CloudFunctionName =
   | 'processVoiceCommand'
   | 'exportReport';
 
+// Compound identity object for multi-tenant user attribution
+export interface UserIdentity {
+  uid: string;              // Firebase Auth UID for security checks
+  memberNumber: number;     // Tenant-specific identifier (voice-friendly)
+  displayName: string;      // Cached display name for audit display
+}
+
 // Request/Response interfaces
 export interface AllocateSequenceRequest {
   tenantId: string;
@@ -55,7 +62,8 @@ export interface ProcessVoiceCommandRequest {
     currentScreen?: string;
     previousCommands?: string[];
     tenantId: string;
-    userId: string;
+    userId: string;  // Firebase Auth UID
+    userIdentity: UserIdentity;  // Full compound identity for audit logging
   };
 }
 
@@ -277,6 +285,9 @@ export class ApiService {
     const tenantId = localStorage.getItem('tenantId') || '';
     const userId = this.auth.currentUser?.uid || '';
 
+    // Get current user identity from cached auth state
+    const userIdentity = this.getCurrentUserIdentity();
+
     return this.callFunction<ProcessVoiceCommandRequest, ProcessVoiceCommandResponse>(
       'processVoiceCommand',
       {
@@ -284,7 +295,8 @@ export class ApiService {
         context: {
           ...command.context,
           tenantId,
-          userId
+          userId,
+          userIdentity
         }
       },
       {
@@ -292,6 +304,20 @@ export class ApiService {
         queueIfOffline: false // Real-time only
       }
     );
+  }
+
+  /**
+   * Get current user identity from auth state
+   * This should be cached from the member document in auth state
+   */
+  private getCurrentUserIdentity(): UserIdentity {
+    // In a real implementation, this would come from cached auth state
+    // that includes the member document data
+    return {
+      uid: this.auth.currentUser?.uid || '',
+      memberNumber: 0, // Retrieved from cached member document
+      displayName: this.auth.currentUser?.displayName || ''
+    };
   }
 
   /**
@@ -395,6 +421,57 @@ export class AuthInterceptor implements HttpInterceptor {
     return Capacitor.getPlatform(); // 'ios', 'android', or 'web'
   }
 }
+```
+
+## Auth State Management
+
+### Caching User Identity
+
+The application should cache the user's compound identity object in NgRx auth state after login:
+
+```typescript
+// auth.state.ts
+export interface AuthState {
+  user: {
+    uid: string;
+    email: string;
+    tenantId: string;
+    identity: UserIdentity;  // Cached compound identity
+    role: 'owner' | 'representative' | 'teamMember';
+  } | null;
+  loading: boolean;
+  error: string | null;
+}
+
+// auth.effects.ts
+loginSuccess$ = createEffect(() =>
+  this.actions$.pipe(
+    ofType(AuthActions.loginSuccess),
+    switchMap(({ uid, tenantId }) => {
+      // Fetch member document to get full identity
+      const memberRef = doc(
+        this.firestore,
+        `tenants/${tenantId}/members/${uid}`
+      );
+
+      return from(getDoc(memberRef)).pipe(
+        map(memberDoc => {
+          const memberData = memberDoc.data();
+          const identity: UserIdentity = {
+            uid,
+            memberNumber: memberData.teamMemberNumber,
+            displayName: memberData.displayName
+          };
+
+          return AuthActions.loadIdentitySuccess({ identity });
+        })
+      );
+    })
+  )
+);
+```
+
+This cached identity is then used whenever creating or updating documents to populate the `createdBy` and `updatedBy` fields.
 ```
 
 ### Offline Interceptor

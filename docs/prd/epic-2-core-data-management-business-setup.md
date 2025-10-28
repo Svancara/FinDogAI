@@ -17,9 +17,9 @@
 3. "Create Job" button navigates to job creation form
 4. Job creation form fields: title (required), description, budget (optional), currency (default from businessProfile), vatRate (default from businessProfile)
 5. On save (online), `jobNumber` is allocated by HTTPS callable (transactional) and returned to the client; offline, show placeholder '—' and the number is assigned on sync by an onCreate trigger
-6. New job saved to `/tenants/{tenantId}/jobs/{jobId}` with: jobNumber, title, description, status: "active", currency, vatRate, budget, createdAt, createdBy (current team member ID)
+6. New job saved to `/tenants/{tenantId}/jobs/{jobId}` with: jobNumber, title, description, status: "active", currency, vatRate, budget, createdAt, createdBy: {uid, memberNumber, displayName} (compound identity object from current user's auth context and team member resource)
 7. Job detail screen displays all job fields with Edit and Archive buttons
-8. Edit job updates: title, description, budget, currency, vatRate, updatedAt, updatedBy
+8. Edit job updates: title, description, budget, currency, vatRate, updatedAt, updatedBy: {uid, memberNumber, displayName}
 9. Archive job changes status to "archived" (soft delete, not physically removed)
 10. Empty state message: "No jobs yet. Create your first job to get started."
 11. Offline mode: Job CRUD works without network, syncs when online
@@ -38,8 +38,8 @@
 4. Vehicle form reads distanceUnit from businessProfile and displays single rate field labeled "Rate per [Km/Mile]" accordingly
 5. Vehicle form fields: name (required, e.g., "Transporter", "Škoda Octavia"), rate (required, labeled based on distanceUnit)
 6. On save (online), `vehicleNumber` is allocated by HTTPS callable (transactional) and returned to the client; offline, the number is assigned on sync by an onCreate trigger
-7. Vehicle saved to `/tenants/{tenantId}/vehicles/{vehicleId}` with: vehicleNumber, name, distanceUnit (copied from businessProfile), ratePerDistanceUnit, createdAt, createdBy
-8. Edit vehicle updates: name, rate, updatedAt, updatedBy (distanceUnit remains immutable from creation time)
+7. Vehicle saved to `/tenants/{tenantId}/vehicles/{vehicleId}` with: vehicleNumber, name, distanceUnit (copied from businessProfile), ratePerDistanceUnit, createdAt, createdBy: {uid, memberNumber, displayName}
+8. Edit vehicle updates: name, rate, updatedAt, updatedBy: {uid, memberNumber, displayName} (distanceUnit remains immutable from creation time)
 9. Delete vehicle removes from Firestore immediately without reference checking (costs/events contain full vehicle copies)
 10. Empty state: "No vehicles yet. Add your first vehicle to track journey costs."
 11. Vehicle deletion shows confirmation: "Delete [vehicleNumber] Name? This cannot be undone."
@@ -57,8 +57,8 @@
 3. "Add Machine" button navigates to machine creation form
 4. Machine form fields: name (required, e.g., "Excavator", "Drill"), hourlyRate (required)
 5. On save (online), `machineNumber` is allocated by HTTPS callable (transactional) and returned to the client; offline, the number is assigned on sync by an onCreate trigger
-6. Machine saved to `/tenants/{tenantId}/machines/{machineId}` with: machineNumber, name, hourlyRate, createdAt, createdBy
-7. Edit machine updates: name, hourlyRate, updatedAt, updatedBy
+6. Machine saved to `/tenants/{tenantId}/machines/{machineId}` with: machineNumber, name, hourlyRate, createdAt, createdBy: {uid, memberNumber, displayName}
+7. Edit machine updates: name, hourlyRate, updatedAt, updatedBy: {uid, memberNumber, displayName}
 8. Delete machine removes from Firestore immediately without reference checking (costs/events contain full machine copies)
 9. Empty state: "No machines yet. Add equipment to track machine labor costs."
 10. Machine deletion shows confirmation: "Delete [machineNumber] Name? This cannot be undone."
@@ -77,8 +77,8 @@
 4. "Add Team Member" opens an "Invite Member" dialog
 5. Invite form fields: email (optional), role select: representative | teamMember; after the invite is redeemed, the owner can set name/hourlyRate on the team member resource
 6. On "Create Invite", a Cloud Function creates `/tenants/{tenantId}/invites/{inviteId}` and returns a single-use code/link (TTL; single-use)
-7. Upon invite redemption, membership is created at `/tenants/{tenantId}/members/{uid}` with selected role and `status: 'active'`; a team member resource is created at `/tenants/{tenantId}/teamMembers/{teamMemberId}` with `teamMemberNumber` and `authUserId: uid`
-8. Edit team member updates: name, hourlyRate, updatedAt, updatedBy (role is managed on the membership and editable by owners only; team member #1 cannot change their owner status)
+7. Upon invite redemption, membership is created at `/tenants/{tenantId}/members/{uid}` with selected role and `status: 'active'`; a team member resource is created at `/tenants/{tenantId}/teamMembers/{teamMemberId}` with `teamMemberNumber` and `authUserId: uid`, with initial createdBy from the inviting owner's identity
+8. Edit team member updates: name, hourlyRate, updatedAt, updatedBy: {uid, memberNumber, displayName} (role is managed on the membership and editable by owners only; team member #1 cannot change their owner status)
 9. Delete team member removes the resource document; membership removal is a separate owner-only action (not implied by resource deletion)
 10. **Owner protection:** Team member #1 cannot be deleted - delete button hidden/disabled with tooltip: "Business owner (Member #1) cannot be deleted"
 11. Non-owner team member deletion shows confirmation: "Delete [teamMemberNumber] Name? This cannot be undone."

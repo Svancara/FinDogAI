@@ -88,29 +88,29 @@
     - codeHash, expiresAt, createdBy, presetRole, consumedAt (optional), email (optional)
   jobs/{jobId}
     - tenantId, jobNumber (sequence), title, status, currency, vatRate, budget
-    - createdAt, createdBy, updatedAt, updatedBy (audit metadata)
+    - createdAt, createdBy: {uid, memberNumber, displayName}, updatedAt, updatedBy: {uid, memberNumber, displayName} (audit metadata)
     costs/{costId}
       - tenantId, ordinalNumber (sequence), category, amount, description
       - resource (object copy at creation; non-authoritative): transport embeds vehicleNumber, name, distanceUnit, ratePerDistanceUnit; labor embeds teamMemberNumber, name, hourlyRate; machine embeds machineNumber, name, hourlyRate
-      - createdAt, createdBy, updatedAt, updatedBy
+      - createdAt, createdBy: {uid, memberNumber, displayName}, updatedAt, updatedBy: {uid, memberNumber, displayName}
     advances/{advanceId}
       - tenantId, ordinalNumber (sequence), amount, date, note
-      - createdAt, createdBy, updatedAt, updatedBy
+      - createdAt, createdBy: {uid, memberNumber, displayName}, updatedAt, updatedBy: {uid, memberNumber, displayName}
     events/{eventId}
       - tenantId, ordinalNumber (sequence), type, timestamp, data (journey details, etc.)
-      - createdAt, createdBy, updatedAt, updatedBy
+      - createdAt, createdBy: {uid, memberNumber, displayName}, updatedAt, updatedBy: {uid, memberNumber, displayName}
   jobs_public/{jobId}
     - jobNumber, title, status (sanitized read model for teamMember role)
   vehicles/{vehicleId}
     - tenantId, vehicleNumber (sequence), name, distanceUnit (from business profile), ratePerDistanceUnit
-    - createdAt, createdBy, updatedAt, updatedBy
+    - createdAt, createdBy: {uid, memberNumber, displayName}, updatedAt, updatedBy: {uid, memberNumber, displayName}
   machines/{machineId}
     - tenantId, machineNumber (sequence), name, hourlyRate
-    - createdAt, createdBy, updatedAt, updatedBy
+    - createdAt, createdBy: {uid, memberNumber, displayName}, updatedAt, updatedBy: {uid, memberNumber, displayName}
   teamMembers/{teamMemberId}
     - tenantId, teamMemberNumber (sequence), name, hourlyRate
     - authUserId (Firebase Auth UID for login mapping; owner's team member #1 maps to owner)
-    - createdAt, createdBy, updatedAt, updatedBy
+    - createdAt, createdBy: {uid, memberNumber, displayName}, updatedAt, updatedBy: {uid, memberNumber, displayName}
   businessProfile (document)
     - tenantId, currency, vatRate, distanceUnit
     - createdAt, updatedAt
@@ -119,7 +119,7 @@
     - createdAt, updatedAt
   audit_logs/{logId}
     - operation (CREATE|UPDATE|DELETE), collection, documentId, tenantId
-    - timestamp, authorId (team member ID)
+    - timestamp, author: {uid, memberNumber, displayName} (compound identity object from document createdBy/updatedBy)
     - before (old data for UPDATE), after (new data for CREATE/UPDATE)
     - ttl (expires 1 year from timestamp)
 
@@ -128,6 +128,22 @@
   - createdAt (derived), updatedAt
 
 ```
+
+#### Multi-Tenant User Identity Model
+
+**Compound Identity Objects:**
+All createdBy/updatedBy fields use compound identity objects instead of simple UIDs to provide rich audit context within the tenant scope:
+- Structure: `{uid: string, memberNumber: number, displayName: string}`
+- Purpose: Enables human-readable audit trails and proper attribution without additional lookups
+- uid: Firebase Auth UID (cross-tenant identifier)
+- memberNumber: Tenant-scoped team member sequential number (voice-friendly, tenant-local)
+- displayName: User's display name at the time of the operation (snapshot for audit history)
+
+**Implementation Notes:**
+- Identity objects are set at document creation/update time from the current user's auth context and team member resource
+- These are snapshots; if a user's displayName changes later, historical audit metadata remains unchanged
+- Security Rules enforce that request.auth.uid matches the uid field in createdBy/updatedBy objects
+- For audit log authorId field, the compound identity object is stored in full, not just the UID
 
 #### User-to-Tenant Mapping (user_tenants)
 

@@ -75,7 +75,7 @@
 1. Registration screen with fields: email, password, displayName
 2. Form validation: email format, password strength (min 8 chars), required fields
 3. On successful registration, Firebase Auth user created
-4. On success, a new tenant is created at `/tenants/{tenantId}` (server-generated ID) with `createdBy: user.uid`, `createdAt`
+4. On success, a new tenant is created at `/tenants/{tenantId}` (server-generated ID) with `createdBy: {uid: user.uid, memberNumber: 1, displayName}`, `createdAt`
 5. Membership document created at `/tenants/{tenantId}/members/{user.uid}` with `{ role: 'owner', status: 'active' }`
 6. Index document created at `/user_tenants/{user.uid}/memberships/{tenantId}` for listing/selecting tenants (read-only; maintained by Cloud Functions)
 7. Initial profile docs created under `/tenants/{tenantId}`: `personProfile` (displayName, email, language: cs, aiSupportEnabled: true, createdAt) and `businessProfile` (currency: CZK, vatRate: 21%, distanceUnit: km, createdAt); create team member resource `teamMembers/{teamMemberId}` for the owner with `teamMemberNumber: 1`, `authUserId: user.uid`, `name: displayName`
@@ -95,10 +95,11 @@
 2. Behavior:
    - If a mapping exists at `user_tenants/{uid}` OR an index exists at `/user_tenants/{uid}/memberships/{tenantId}`, return the existing `tenantId`.
    - If none exists, atomically create:
-     - `/tenants/{tenantId}` with `createdBy: uid`, `createdAt`
+     - `/tenants/{tenantId}` with `createdBy: {uid, memberNumber: 1, displayName}`, `createdAt`
      - `/tenants/{tenantId}/members/{uid}` with `{ role: 'owner', status: 'active' }`
      - `/user_tenants/{uid}/memberships/{tenantId}` (read-only index for listing/selecting tenants)
      - `user_tenants/{uid}` with `{ tenantId, createdAt }`
+     - Team member resource at `/tenants/{tenantId}/teamMembers/{teamMemberId}` with `teamMemberNumber: 1`, `authUserId: uid`, `name: displayName`
 3. Idempotency: Safe to call repeatedly without creating duplicates; concurrent calls do not create multiple tenants.
 4. After success, client invokes `setActiveTenantClaim({ tenantId })` (Story 1.3b) and force-refreshes the ID token.
 5. Emulator tests: First-time call creates tenant + mapping; subsequent calls return the same `tenantId` with no duplicates.
@@ -194,7 +195,7 @@
 **Acceptance Criteria:**
 
 1. "Invite Member" dialog available from Team Members screen with fields: Email (optional), Role: representative | teamMember
-2. On "Create Invite", an HTTPS callable Cloud Function creates `/tenants/{tenantId}/invites/{inviteId}` with: `codeHash` (hashed server-side), `expiresAt` (TTL ≥72h), `createdBy`, `presetRole`, `status: pending`
+2. On "Create Invite", an HTTPS callable Cloud Function creates `/tenants/{tenantId}/invites/{inviteId}` with: `codeHash` (hashed server-side), `expiresAt` (TTL ≥72h), `createdBy: {uid, memberNumber, displayName}`, `presetRole`, `status: pending`
 3. Function returns a single-use invite code/link; code itself is not stored in Firestore (only hash)
 4. Invites list shows pending/consumed/expired with basic metadata; owners can revoke (delete) pending invites
 5. Cloud Function protected by App Check and rate limiting

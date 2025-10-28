@@ -64,7 +64,7 @@
 
 **Acceptance Criteria:**
 
-1. All mutable entities (jobs, vehicles, machines, teamMembers, costs, advances, events) include `createdAt`, `createdBy`, `updatedAt` (serverTimestamp), `updatedBy`
+1. All mutable entities (jobs, vehicles, machines, teamMembers, costs, advances, events) include `createdAt`, `createdBy` (compound identity object), `updatedAt` (serverTimestamp), `updatedBy` (compound identity object)
 2. Conflict policy: Last-Write-Wins (LWW) at document level; Firestore's built-in conflict resolution applies (later serverTimestamp wins); no auto-merge at field level for MVP
 3. Delete vs Update conflict: Jobs use soft delete (`status: archived`) to avoid destructive deletes; for other entities (vehicles, machines, teamMembers, costs, advances, events), if a server-side delete precedes an offline update, the update fails on sync and appears in Sync Issues UI with actions: Discard, Recreate as new
 4. Sequential numbers never conflict: Numbers assigned only by Cloud Functions (allocateSequence HTTPS callable for online; onCreate triggers for offline); offline-created items show placeholder '—' until sync assigns number; no duplicates possible

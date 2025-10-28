@@ -38,7 +38,7 @@
 3. Voice Confirmation Modal displays: "✓ Journey to **Brno** | Vehicle: **[1] Transporter** | Odometer: **12,345 [unit]**" (unit label from businessProfile)
 4. TTS plays: "Starting journey to Brno in Transporter, odometer one two three four five. Say 'yes' to confirm or 'no' to retry."
 5. User responds "yes" (voice) OR taps Accept button → Journey event created under targeted job (inline override if present, else Active Job) at `/tenants/{tenantId}/jobs/{jobId}/events/{eventId}`
-6. Event document: ordinalNumber (sequence), type: "journey_start", timestamp (now), data: {destination, vehicle: {full vehicle object copy}, odometerStart: 12345, odometerEnd: null, calculatedDistance: null, calculatedCost: null}, createdAt, createdBy (current team member ID)
+6. Event document: ordinalNumber (sequence), type: "journey_start", timestamp (now), data: {destination, vehicle: {full vehicle object copy}, odometerStart: 12345, odometerEnd: null, calculatedDistance: null, calculatedCost: null}, createdAt, createdBy: {uid, memberNumber, displayName}
 7. Success message (toast): "Journey to Brno started" (in user's language)
 8. Journey event displayed in Job Detail → Events timeline: "[ordinalNumber] Journey to Brno - Transporter - 12,345 [unit]" (unit label from businessProfile)
 9. Offline development mode only: mock pipeline saves event locally; in production offline, voice interactions are disabled (no recording); manual Start Journey entry remains available.
@@ -66,7 +66,7 @@
 4. **Distance Mode:** Distance in km/miles (number with unit label from businessProfile), Amount auto-calculated (distance × vehicle.ratePerDistanceUnit) displayed read-only
 5. **Manual Amount Mode:** Amount (number with currency), Distance field hidden, Vehicle still required
 6. On save, cost created in `/tenants/{tenantId}/jobs/{jobId}/costs/{costId}` where jobId is the current job context
-7. Cost document: ordinalNumber (sequence), category: "transport", amount, vehicle: {full vehicle object copy with vehicleNumber, name, distanceUnit, ratePerDistanceUnit}, distance (null if manual amount mode), description, timestamp, createdAt, createdBy
+7. Cost document: ordinalNumber (sequence), category: "transport", amount, vehicle: {full vehicle object copy with vehicleNumber, name, distanceUnit, ratePerDistanceUnit}, distance (null if manual amount mode), description, timestamp, createdAt, createdBy: {uid, memberNumber, displayName}
 8. Cost displayed in Job Detail → Costs tab: "[ordinalNumber] Transport - [vehicleNumber] Vehicle Name - X [unit] - Y CZK" (or "- Y CZK" if distance is null; unit label from businessProfile)
 9. Edit cost: Tap cost item → opens form pre-filled with original mode (distance/manual), allows updates to distance/amount/description/vehicle, job context remains unchanged
 10. Delete cost: Swipe left or long-press → confirmation: "Delete cost [ordinalNumber]?" → removes from Firestore
@@ -87,17 +87,17 @@
 2. **Material form:** **Input Mode toggle (Quantity + Unit Price / Total Amount Only)**, Description (required), Supplier (optional), Date/Time
 3. **Material Quantity Mode:** Quantity (number of units), Unit Price (price per unit), Amount auto-calculated (quantity × unitPrice) displayed read-only
 4. **Material Total Amount Mode:** Amount (number with currency), Quantity and Unit Price fields hidden
-5. Material cost document: ordinalNumber, category: "material", amount, quantity (null if total amount mode), unitPrice (null if total amount mode), description, supplier, timestamp, createdAt, createdBy
+5. Material cost document: ordinalNumber, category: "material", amount, quantity (null if total amount mode), unitPrice (null if total amount mode), description, supplier, timestamp, createdAt, createdBy: {uid, memberNumber, displayName}
 6. **Labor form:** Team Member (dropdown `[teamMemberNumber] Name`), **Input Mode toggle (Hours / Manual Amount)**, Description (optional), Date/Time
 7. **Labor Hours Mode:** Hours (number), Amount auto-calculated (hours × teamMember.hourlyRate) displayed read-only
 8. **Labor Manual Amount Mode:** Amount (number with currency), Hours field hidden, Team Member still required
-9. Labor cost document: ordinalNumber, category: "labor", amount, teamMember: {full team member object copy}, hours (null if manual amount mode), description, timestamp, createdAt, createdBy
+9. Labor cost document: ordinalNumber, category: "labor", amount, teamMember: {full team member object copy}, hours (null if manual amount mode), description, timestamp, createdAt, createdBy: {uid, memberNumber, displayName}
 10. **Machine form:** Machine (dropdown `[machineNumber] Name`), **Input Mode toggle (Hours / Manual Amount)**, Description (optional), Date/Time
 11. **Machine Hours Mode:** Hours (number), Amount auto-calculated (hours × machine.hourlyRate) displayed read-only
 12. **Machine Manual Amount Mode:** Amount (number with currency), Hours field hidden, Machine still required
-13. Machine cost document: ordinalNumber, category: "machine", amount, machine: {full machine object copy}, hours (null if manual amount mode), description, timestamp, createdAt, createdBy
+13. Machine cost document: ordinalNumber, category: "machine", amount, machine: {full machine object copy}, hours (null if manual amount mode), description, timestamp, createdAt, createdBy: {uid, memberNumber, displayName}
 14. **Other form:** Amount (number with currency), Description (required), Date/Time
-15. Other cost document: ordinalNumber, category: "other", amount, description, timestamp, createdAt, createdBy
+15. Other cost document: ordinalNumber, category: "other", amount, description, timestamp, createdAt, createdBy: {uid, memberNumber, displayName}
 16. All costs saved to `/tenants/{tenantId}/jobs/{jobId}/costs/{costId}` where jobId is the current job context
 17. All categories support Edit (update amount/description/resource, mode preserved from creation, job context remains unchanged) and Delete (with confirmation)
 18. Job Detail → Costs tab displays costs grouped by category with sequential ordinalNumbers and totals per category
@@ -117,8 +117,8 @@
 3. "Add Advance" button opens advance entry form (job context is implicit - current job from Job Detail screen)
 4. Form fields: Amount (required, number with currency from job), Date (default: today), Note (optional, e.g., "Initial deposit", "Payment #2")
 5. On save, advance created in `/tenants/{tenantId}/jobs/{jobId}/advances/{advanceId}` where jobId is the current job context
-6. Advance document: ordinalNumber (sequence), amount, date, note, createdAt, createdBy
-7. Edit advance: Tap item → opens form pre-filled, allows updates to amount/date/note, updatedAt, updatedBy
+6. Advance document: ordinalNumber (sequence), amount, date, note, createdAt, createdBy: {uid, memberNumber, displayName}
+7. Edit advance: Tap item → opens form pre-filled, allows updates to amount/date/note, updatedAt, updatedBy: {uid, memberNumber, displayName}
 8. Delete advance: Swipe left → confirmation: "Delete advance [ordinalNumber]?" → removes from Firestore
 9. Job Detail header displays financial summary: "Costs: X CZK | Advances: Y CZK | **Net Due: (X - Y) CZK**" (green if positive, red if negative)
 10. Net Due calculation updates in real-time as costs/advances added/removed

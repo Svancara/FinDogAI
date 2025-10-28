@@ -18,9 +18,9 @@
 
 **FR6:** The system shall provide Resources Management for Team Members (minimum one: the user), Vehicles, and Machines, each with properties (name, hourly rates for labor/machines, per-distance rates for vehicles).
 
-**FR7:** The system shall maintain basic audit metadata on all database entities: createdAt timestamp, createdBy user ID, updatedAt timestamp, and updatedBy user ID.
+**FR7:** The system shall maintain basic audit metadata on all database entities: createdAt timestamp, createdBy compound identity object {uid, memberNumber, displayName}, updatedAt timestamp, and updatedBy compound identity object {uid, memberNumber, displayName}. This provides rich audit context within the tenant scope without requiring additional lookups.
 
-**FR8:** The system shall implement comprehensive audit logging via Cloud Functions triggers (onCreate/onUpdate/onDelete) that capture full operation history to a tenant-scoped `audit_logs` subcollection under `/tenants/{tenantId}`, including: operation type, timestamp, author (user ID), old values (for UPDATE), and complete object snapshots (for DELETE). Audit logs have owner-only UI access (representative and team member have no access), are excluded from exports, and auto-expire after 1 year for cost optimization.
+**FR8:** The system shall implement comprehensive audit logging via Cloud Functions triggers (onCreate/onUpdate/onDelete) that capture full operation history to a tenant-scoped `audit_logs` subcollection under `/tenants/{tenantId}`, including: operation type, timestamp, author (compound identity object from createdBy/updatedBy), old values (for UPDATE), and complete object snapshots (for DELETE). Audit logs have owner-only UI access (representative and team member have no access), are excluded from exports, and auto-expire after 1 year for cost optimization.
 
 **FR9:** The system shall track Advances as a per-job subcollection with auto-assigned ordinalNumber (server-allocated per-job sequence), displaying sum of advances vs sum of costs.
 
@@ -31,7 +31,7 @@
 - Owner's representative: Jobs are read-only; cannot change Business Profile; cannot change privileges; cannot view audit_logs; cannot export any data; all other functions and data are fully available (including costs and resources).
 - Team member: Jobs are read-only (only active jobs visible; only `jobNumber` and `title` shown); cannot change Business Profile, privileges, or resources; cannot export any data; no access to the advances collection; all other functions and data are available (including adding/editing costs).
 
-**FR12:** The system shall require team member authentication and identification, storing the team member ID with all operations for audit trail purposes.
+**FR12:** The system shall require team member authentication and identification, storing the compound identity object {uid, memberNumber, displayName} with all operations for audit trail purposes. This enables both machine-readable (uid) and human-readable (memberNumber, displayName) audit attribution.
 
 **FR13:** The system shall enable Firestore offline persistence, ensuring all manual flows function without network connectivity, with automatic background sync and visible sync status indicators. Production voice flows require network connectivity; when offline, voice interactions are disabled and the app shall work fully via manual flows; no audio is recorded or queued.
 
@@ -45,7 +45,7 @@
 
 **FR18:** The system shall assign sequential, voice-friendly numbers via Cloud Functions using transactional allocation (not client-side counters): jobNumber, teamMemberNumber, vehicleNumber, machineNumber per tenant; ordinalNumber per job (costs/advances/events). Online: allocate via HTTPS callable; Offline: assigned on sync by onCreate triggers. Gaps acceptable; duplicates prohibited.
 
-**FR19:** The system shall implement an offline sync conflict resolution policy. All mutable documents include `createdAt`, `createdBy`, `updatedAt` (serverTimestamp), and `updatedBy`. Conflicts are resolved via last-write-wins (LWW) at the document level; sequential numbers are allocated server-side to prevent ID conflicts; jobs use soft delete (`status: archived`) instead of destructive delete. Updates to deleted documents and other sync errors are surfaced in a "Sync Issues" UI with options to Discard, Retry, or Recreate as new. Audit logs provide traceability for manual review and recovery.
+**FR19:** The system shall implement an offline sync conflict resolution policy. All mutable documents include `createdAt`, `createdBy` (compound identity object), `updatedAt` (serverTimestamp), and `updatedBy` (compound identity object). Conflicts are resolved via last-write-wins (LWW) at the document level; sequential numbers are allocated server-side to prevent ID conflicts; jobs use soft delete (`status: archived`) instead of destructive delete. Updates to deleted documents and other sync errors are surfaced in a "Sync Issues" UI with options to Discard, Retry, or Recreate as new. Audit logs provide traceability for manual review and recovery.
 
 **FR20:** The system shall support true hands-free voice confirmation via wake-word ("Hey FinDog") followed by "yes" or "no" responses to accept or retry voice commands. This enables safe operation while driving or when hands are occupied. Touch-based Accept/Retry/Cancel buttons remain available as fallback for noisy environments or when hands are free.
 

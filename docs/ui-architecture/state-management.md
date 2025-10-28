@@ -10,6 +10,14 @@ This section provides a comprehensive example of NgRx state management for the J
 
 ```typescript
 // jobs.state.ts - State interface
+
+// Compound identity object for multi-tenant user attribution
+export interface UserIdentity {
+  uid: string;              // Firebase Auth UID for security checks
+  memberNumber: number;     // Tenant-specific identifier (voice-friendly)
+  displayName: string;      // Cached display name for audit display
+}
+
 export interface Job {
   id: string;
   tenantId: string;
@@ -20,7 +28,9 @@ export interface Job {
   vatRate: number;
   currency: string;
   createdAt: Timestamp;
+  createdBy: UserIdentity;  // Compound identity object
   updatedAt: Timestamp;
+  updatedBy: UserIdentity;  // Compound identity object
   _syncStatus?: 'synced' | 'pending' | 'error';
   _localChanges?: boolean;
 }
@@ -39,6 +49,91 @@ export interface JobsState {
     lastSync: number | null;
     pendingChanges: string[]; // IDs of jobs with pending changes
   };
+}
+
+// Other entities that use compound identity objects
+export interface Cost {
+  id: string;
+  tenantId: string;
+  jobId: string;
+  ordinalNumber: number;
+  type: 'material' | 'labor' | 'transport' | 'other';
+  amount: number;
+  description: string;
+  date: Timestamp;
+  createdAt: Timestamp;
+  createdBy: UserIdentity;
+  updatedAt: Timestamp;
+  updatedBy: UserIdentity;
+  _syncStatus?: 'synced' | 'pending' | 'error';
+}
+
+export interface Advance {
+  id: string;
+  tenantId: string;
+  jobId: string;
+  ordinalNumber: number;
+  amount: number;
+  date: Timestamp;
+  note?: string;
+  createdAt: Timestamp;
+  createdBy: UserIdentity;
+  updatedAt: Timestamp;
+  updatedBy: UserIdentity;
+  _syncStatus?: 'synced' | 'pending' | 'error';
+}
+
+export interface Vehicle {
+  id: string;
+  tenantId: string;
+  vehicleNumber: number;
+  name: string;
+  licensePlate?: string;
+  distanceUnit: 'km' | 'miles';
+  ratePerDistanceUnit: number;
+  createdAt: Timestamp;
+  createdBy: UserIdentity;
+  updatedAt: Timestamp;
+  updatedBy: UserIdentity;
+}
+
+export interface Machine {
+  id: string;
+  tenantId: string;
+  machineNumber: number;
+  name: string;
+  hourlyRate: number;
+  createdAt: Timestamp;
+  createdBy: UserIdentity;
+  updatedAt: Timestamp;
+  updatedBy: UserIdentity;
+}
+
+export interface TeamMember {
+  id: string;
+  tenantId: string;
+  teamMemberNumber: number;
+  name: string;
+  hourlyRate: number;
+  authUserId: string | null;
+  createdAt: Timestamp;
+  createdBy: UserIdentity;
+  updatedAt: Timestamp;
+  updatedBy: UserIdentity;
+}
+
+export interface Event {
+  id: string;
+  tenantId: string;
+  jobId: string;
+  ordinalNumber: number;
+  type: 'journey_start' | 'journey_end' | 'work_start' | 'work_end' | 'machine_start' | 'machine_end';
+  timestamp: Timestamp;
+  createdAt: Timestamp;
+  createdBy: UserIdentity;
+  updatedAt: Timestamp;
+  updatedBy: UserIdentity;
+  // ... event-specific fields
 }
 ```
 
@@ -279,11 +374,16 @@ export class JobsEffects {
     this.actions$.pipe(
       ofType(JobsActions.createJob),
       switchMap(({ job }) => {
+        // Get current user identity from auth state
+        const currentUserIdentity = this.getCurrentUserIdentity();
+
         const newJob = {
           ...job,
           id: doc(collection(this.firestore, 'dummy')).id,
           createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp()
+          createdBy: currentUserIdentity,
+          updatedAt: serverTimestamp(),
+          updatedBy: currentUserIdentity
         };
 
         const jobDoc = doc(this.firestore, `tenants/${this.tenantId}/jobs/${newJob.id}`);
@@ -295,6 +395,17 @@ export class JobsEffects {
       })
     )
   );
+
+  // Helper method to get current user identity
+  private getCurrentUserIdentity(): UserIdentity {
+    // This should be retrieved from auth state in a real implementation
+    // For now, showing the structure
+    return {
+      uid: this.auth.currentUser?.uid || '',
+      memberNumber: 0, // Retrieved from cached member document
+      displayName: this.auth.currentUser?.displayName || ''
+    };
+  }
 
   // Optimistic update with Firestore sync
   updateJob$ = createEffect(() =>
@@ -313,10 +424,12 @@ export class JobsEffects {
 
         // Perform Firestore update
         const jobDoc = doc(this.firestore, `tenants/${this.tenantId}/jobs/${action.id}`);
+        const currentUserIdentity = this.getCurrentUserIdentity();
 
         return from(updateDoc(jobDoc, {
           ...action.changes,
-          updatedAt: serverTimestamp()
+          updatedAt: serverTimestamp(),
+          updatedBy: currentUserIdentity
         })).pipe(
           map(() => JobsActions.updateJobSuccess({
             id: action.id,
