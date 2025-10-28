@@ -458,7 +458,43 @@ interface AuditLog {
 
 ---
 
-### 4.1.2 Global Collections
+### 4.1.2 Tenant Root Document
+
+#### Document: `/tenants/{tenantId}`
+
+Root tenant document storing tenant-level metadata and schema versioning information.
+
+```typescript
+interface Tenant {
+  tenantId: string;           // UUID, matches path parameter
+  schemaVersion: number;      // Current schema version (starts at 1)
+  createdAt: Timestamp;       // serverTimestamp
+  updatedAt: Timestamp;       // serverTimestamp
+
+  // Migration tracking
+  migrations?: {
+    [version: number]: {
+      appliedAt: Timestamp;
+      appliedBy: string;      // UID of admin who triggered migration
+      status: 'completed' | 'failed' | 'in_progress';
+      error?: string;
+      documentsProcessed?: number;
+    }
+  };
+}
+```
+
+**Purpose**: Track schema version per tenant to enable zero-downtime migrations and maintain backwards compatibility.
+
+**Schema Versions:**
+- `v1`: Initial schema with compound identity model (current)
+- `v2+`: Future schema versions documented as they are released
+
+**Access**: Read by all authenticated members, write by Cloud Functions only.
+
+---
+
+### 4.1.3 Global Collections
 
 #### Collection: `/user_tenants/{uid}/memberships/{tenantId}`
 
@@ -818,6 +854,229 @@ If upgrading from UID-only approach:
    - Cache current user identity on login
    - Use compound identity object when creating/updating documents
    - Update UI to display from cached identity
+
+---
+
+## 4.5 Schema Versioning
+
+### 4.5.1 Overview
+
+FinDogAI uses tenant-level schema versioning to enable safe evolution of the data model while maintaining backwards compatibility. Each tenant tracks its current schema version and migration history, allowing for zero-downtime updates and gradual rollouts.
+
+### 4.5.2 Versioning Strategy
+
+**Key Principles:**
+1. **Tenant-Level Versioning**: Each tenant has its own schema version, enabling gradual migrations
+2. **Backwards Compatibility**: Clients must handle multiple schema versions gracefully
+3. **Zero-Downtime**: Migrations run in background without service interruption
+4. **Explicit Migrations**: Schema changes require explicit migration functions
+5. **Rollback Support**: Failed migrations can be rolled back per tenant
+
+### 4.5.3 Schema Version History
+
+#### Version 1 (Current - Initial Release)
+**Features:**
+- Compound identity model (UID + memberNumber + displayName)
+- Tenant-scoped collections with multi-tenant isolation
+- Sequential numbering for jobs, resources, and ordinals
+- Audit logging with 1-year retention
+- Offline-first with nullable sequential numbers
+
+**Collections Structure:**
+```
+/tenants/{tenantId}/
+  - members/
+  - jobs/
+    - costs/
+    - advances/
+    - events/
+  - vehicles/
+  - machines/
+  - teamMembers/
+  - audit_logs/
+  - businessProfile (doc)
+  - personProfile (doc)
+```
+
+#### Version 2+ (Future)
+Future schema versions will be documented here as they are released. Each version entry should include:
+- Version number and release date
+- Breaking changes (if any)
+- New fields or collections
+- Migration requirements
+- Deprecation notices
+
+### 4.5.4 Version Compatibility Matrix
+
+| Client Version | Min Schema Version | Max Schema Version | Notes |
+|----------------|-------------------|-------------------|-------|
+| 1.0.x | 1 | 1 | Initial release |
+| 1.1.x | 1 | 2 | Supports v1 and v2 schemas |
+| 2.0.x | 2 | 3 | Drops v1 support, adds v3 |
+
+### 4.5.5 Client Version Checking
+
+**On App Startup:**
+
+```typescript
+// packages/mobile-app/src/app/services/schema-version.service.ts
+
+export class SchemaVersionService {
+  private readonly SUPPORTED_VERSIONS = [1]; // Update as new versions are supported
+  private readonly MINIMUM_VERSION = 1;
+  private readonly MAXIMUM_VERSION = 1;
+
+  async checkCompatibility(tenantId: string): Promise<CompatibilityCheck> {
+    const tenantDoc = await this.firestore
+      .collection('tenants')
+      .doc(tenantId)
+      .get();
+
+    const schemaVersion = tenantDoc.data()?.schemaVersion || 1;
+
+    // Check if client supports this schema version
+    if (schemaVersion < this.MINIMUM_VERSION) {
+      return {
+        compatible: false,
+        action: 'UPGRADE_REQUIRED',
+        message: 'Your data schema is outdated. Please contact support.',
+        currentVersion: schemaVersion,
+        supportedVersions: this.SUPPORTED_VERSIONS
+      };
+    }
+
+    if (schemaVersion > this.MAXIMUM_VERSION) {
+      return {
+        compatible: false,
+        action: 'UPDATE_APP',
+        message: 'Please update to the latest version of FinDogAI.',
+        currentVersion: schemaVersion,
+        supportedVersions: this.SUPPORTED_VERSIONS
+      };
+    }
+
+    return {
+      compatible: true,
+      action: 'PROCEED',
+      message: 'Schema version compatible',
+      currentVersion: schemaVersion,
+      supportedVersions: this.SUPPORTED_VERSIONS
+    };
+  }
+}
+
+interface CompatibilityCheck {
+  compatible: boolean;
+  action: 'PROCEED' | 'UPDATE_APP' | 'UPGRADE_REQUIRED' | 'MIGRATION_IN_PROGRESS';
+  message: string;
+  currentVersion: number;
+  supportedVersions: number[];
+}
+```
+
+### 4.5.6 Handling Mixed Versions During Migration
+
+**Strategy:**
+1. **Read Path**: Clients must handle both old and new schemas
+2. **Write Path**: Clients write in their supported schema version
+3. **Migration Function**: Transforms data from old to new schema
+4. **Gradual Rollout**: Migrate tenants incrementally (batches of 10-50)
+
+**Example: Reading with Version Handling**
+
+```typescript
+// Handle both v1 (single currency) and v2 (multi-currency) schemas
+function readJob(jobDoc: DocumentSnapshot): Job {
+  const data = jobDoc.data();
+  const schemaVersion = data.schemaVersion || 1;
+
+  if (schemaVersion === 1) {
+    return {
+      ...data,
+      currency: data.currency || 'CZK', // v1: single currency
+      currencies: undefined // v2 field not present
+    };
+  } else if (schemaVersion === 2) {
+    return {
+      ...data,
+      currency: data.primaryCurrency, // v2: primary currency
+      currencies: data.currencies // v2: multi-currency support
+    };
+  }
+
+  throw new Error(`Unsupported schema version: ${schemaVersion}`);
+}
+```
+
+### 4.5.7 Migration Status Tracking
+
+**During Migration:**
+
+```typescript
+// Tenant document during migration
+{
+  tenantId: "550e8400-e29b-41d4-a716-446655440000",
+  schemaVersion: 1, // Still on v1 during migration
+  migrations: {
+    2: {
+      appliedAt: Timestamp(2025-11-01 10:30:00),
+      appliedBy: "admin-uid-12345",
+      status: "in_progress",
+      documentsProcessed: 1250,
+      error: null
+    }
+  }
+}
+```
+
+**After Successful Migration:**
+
+```typescript
+{
+  tenantId: "550e8400-e29b-41d4-a716-446655440000",
+  schemaVersion: 2, // Updated to v2
+  migrations: {
+    2: {
+      appliedAt: Timestamp(2025-11-01 10:30:00),
+      appliedBy: "admin-uid-12345",
+      status: "completed",
+      documentsProcessed: 2500,
+      error: null
+    }
+  }
+}
+```
+
+**After Failed Migration:**
+
+```typescript
+{
+  tenantId: "550e8400-e29b-41d4-a716-446655440000",
+  schemaVersion: 1, // Remains on v1
+  migrations: {
+    2: {
+      appliedAt: Timestamp(2025-11-01 10:30:00),
+      appliedBy: "admin-uid-12345",
+      status: "failed",
+      documentsProcessed: 750,
+      error: "Transaction timeout at document batch 15"
+    }
+  }
+}
+```
+
+### 4.5.8 Version Deprecation Policy
+
+**Timeline:**
+1. **Release New Version**: v2 released, v1 still fully supported
+2. **Deprecation Notice (T+3 months)**: v1 marked deprecated, migration recommended
+3. **Migration Window (T+6 months)**: All tenants should migrate to v2
+4. **End of Support (T+12 months)**: v1 client support dropped, forced migration for remaining tenants
+
+**Communication:**
+- Email notifications to tenant owners at each milestone
+- In-app banners for deprecated versions
+- Admin dashboard showing migration status
 
 ---
 

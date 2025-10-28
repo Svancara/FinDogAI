@@ -55,6 +55,8 @@
 
 **FR23:** The system shall provide GDPR-compliant data export functionality, allowing owners to download all their tenant data (jobs, costs, advances, team members, vehicles, machines) in JSON format via a Cloud Function that generates a short-lived signed URL for authenticated download (no direct email attachments). Audit logs are excluded from export. Server-side privilege check: owner required.
 
+**FR24:** The system shall implement tenant-level schema versioning to support safe database evolution. Each tenant document shall include a schemaVersion field (starting at 1) and track migration history. Client applications shall verify schema compatibility on startup, supporting current version N and next version N+1 for zero-downtime migrations. Schema migrations shall run per-tenant via Cloud Functions with dry-run capability, progress tracking, and rollback support. The system shall maintain backwards compatibility for 12 months per version deprecation policy.
+
 
 
 ### Non-Functional Requirements

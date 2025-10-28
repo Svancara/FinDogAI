@@ -80,7 +80,12 @@
 
 **Firestore Data Model:**
 ```
-/tenants/{tenantId}/
+/tenants/{tenantId}  (root document)
+  - schemaVersion: number (current schema version, starts at 1)
+  - migrations: {[version: string]: {appliedAt: timestamp, status: 'completed'|'failed'}}
+  - createdAt, updatedAt
+
+/tenants/{tenantId}/  (subcollections)
   members/{uid}
     - role (owner|representative|teamMember)
     - status (active|disabled), lastSeenAt
@@ -128,6 +133,18 @@
   - createdAt (derived), updatedAt
 
 ```
+
+**Schema Evolution Strategy:**
+
+The tenant root document (`/tenants/{tenantId}`) stores the current `schemaVersion` and migration history to support safe database evolution:
+
+- **schemaVersion:** Integer starting at 1, incremented with each breaking schema change
+- **migrations:** Map tracking migration status per version: `{appliedAt: timestamp, status: 'completed'|'failed'}`
+- **Client compatibility:** Applications support current version N and next version N+1 for zero-downtime migrations
+- **Migration execution:** Per-tenant Cloud Functions with dry-run mode, progress tracking, and rollback capability
+- **Deprecation policy:** Backwards compatibility maintained for 12 months per version
+
+This approach enables gradual tenant migrations without downtime and provides audit trail for schema changes.
 
 #### Multi-Tenant User Identity Model
 

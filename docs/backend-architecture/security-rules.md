@@ -87,6 +87,49 @@ service cloud.firestore {
         && request.resource.data.createdBy.displayName == resource.data.createdBy.displayName;
     }
 
+    // Schema version checking functions
+    // These functions ensure data integrity during schema migrations by preventing
+    // writes when migrations are in progress and enforcing version compatibility.
+
+    function getSchemaVersion(tenantId) {
+      // Retrieves the current schema version for a tenant
+      // Returns the schemaVersion field from the tenant document
+      // If the field doesn't exist, defaults to version 1
+      let tenant = get(/databases/$(database)/documents/tenants/$(tenantId));
+      return tenant.data.keys().hasAny(['schemaVersion'])
+        ? tenant.data.schemaVersion
+        : 1;
+    }
+
+    function isMigrationInProgress(tenantId) {
+      // Checks if a schema migration is currently running for a tenant
+      // Returns true if the migrations.inProgress field is set to true
+      // During migrations, most write operations should be blocked to prevent
+      // data corruption from schema inconsistencies
+      let tenant = get(/databases/$(database)/documents/tenants/$(tenantId));
+      return tenant.data.keys().hasAny(['migrations'])
+        && tenant.data.migrations.keys().hasAny(['inProgress'])
+        && tenant.data.migrations.inProgress == true;
+    }
+
+    function isSchemaCompatible(tenantId) {
+      // Checks if the tenant's schema version is compatible with client operations
+      // Currently allows schema versions 1 and 2
+      // Extend this list as new schema versions are released
+      // Incompatible versions should be handled by forcing client updates
+      let version = getSchemaVersion(tenantId);
+      return version >= 1 && version <= 2;
+    }
+
+    function canWriteToTenant(tenantId) {
+      // Master check for write operations to tenant data
+      // Blocks writes if:
+      // - A migration is in progress (prevents data corruption)
+      // - Schema version is incompatible (prevents client/server mismatch)
+      // This should be used in all write rules for tenant collections
+      return !isMigrationInProgress(tenantId) && isSchemaCompatible(tenantId);
+    }
+
     // User-tenant mappings (read-only for clients)
     match /user_tenants/{uid}/memberships/{tenantId} {
       allow read: if isAuthenticated() && request.auth.uid == uid;
@@ -100,13 +143,25 @@ service cloud.firestore {
 
     // Tenant data
     match /tenants/{tenantId} {
+      // Tenant root document
+      // Contains metadata including schemaVersion and migrations status
+      allow read: if isActiveMember(tenantId);
+      allow update: if isOwner(tenantId)
+        // Prevent clients from modifying schema-related fields
+        // Only Cloud Functions can update schemaVersion and migrations
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['schemaVersion']))
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['migrations']));
+      allow create, delete: if false; // Tenants created via Cloud Functions only
 
       // Members collection
       match /members/{uid} {
         allow read: if isActiveMember(tenantId);
         allow create: if false; // Only via invite consumption (Cloud Function)
-        allow update: if isOwner(tenantId); // Owner can change roles/status
-        allow delete: if isOwner(tenantId) && uid != request.auth.uid; // Can't delete self
+        allow update: if isOwner(tenantId)
+          && canWriteToTenant(tenantId); // Check migration status and schema version
+        allow delete: if isOwner(tenantId)
+          && uid != request.auth.uid // Can't delete self
+          && canWriteToTenant(tenantId);
       }
 
       // Invites collection
@@ -114,20 +169,26 @@ service cloud.firestore {
         allow read: if isActiveMember(tenantId);
         allow create: if isOwnerOrRepresentative(tenantId)
           && documentHasTenantId(tenantId)
-          && auditMetadataValid();
+          && auditMetadataValid()
+          && canWriteToTenant(tenantId);
         allow update: if false; // Immutable after creation
-        allow delete: if isOwner(tenantId);
+        allow delete: if isOwner(tenantId)
+          && canWriteToTenant(tenantId);
       }
 
       // Business profile (single document)
       match /businessProfile {
         allow read: if isActiveMember(tenantId);
-        allow write: if isOwner(tenantId) && documentHasTenantId(tenantId);
+        allow write: if isOwner(tenantId)
+          && documentHasTenantId(tenantId)
+          && canWriteToTenant(tenantId);
       }
 
       // Person profile (single document)
       match /personProfile {
-        allow read, write: if isActiveMember(tenantId);
+        allow read: if isActiveMember(tenantId);
+        allow write: if isActiveMember(tenantId)
+          && canWriteToTenant(tenantId);
       }
 
       // Jobs collection
@@ -135,10 +196,12 @@ service cloud.firestore {
         allow read: if isOwnerOrRepresentative(tenantId);
         allow create: if isOwnerOrRepresentative(tenantId)
           && documentHasTenantId(tenantId)
-          && auditMetadataValid();
+          && auditMetadataValid()
+          && canWriteToTenant(tenantId);
         allow update: if isOwnerOrRepresentative(tenantId)
           && documentHasTenantId(tenantId)
-          && updateMetadataValid();
+          && updateMetadataValid()
+          && canWriteToTenant(tenantId);
         allow delete: if false; // Use soft delete (status: archived)
 
         // Costs subcollection
@@ -146,11 +209,14 @@ service cloud.firestore {
           allow read: if isActiveMember(tenantId); // Team members can read
           allow create: if isActiveMember(tenantId)
             && documentHasTenantId(tenantId)
-            && auditMetadataValid();
+            && auditMetadataValid()
+            && canWriteToTenant(tenantId);
           allow update: if isActiveMember(tenantId)
             && documentHasTenantId(tenantId)
-            && updateMetadataValid();
-          allow delete: if isOwnerOrRepresentative(tenantId);
+            && updateMetadataValid()
+            && canWriteToTenant(tenantId);
+          allow delete: if isOwnerOrRepresentative(tenantId)
+            && canWriteToTenant(tenantId);
         }
 
         // Advances subcollection
@@ -158,11 +224,14 @@ service cloud.firestore {
           allow read: if isOwnerOrRepresentative(tenantId);
           allow create: if isOwnerOrRepresentative(tenantId)
             && documentHasTenantId(tenantId)
-            && auditMetadataValid();
+            && auditMetadataValid()
+            && canWriteToTenant(tenantId);
           allow update: if isOwnerOrRepresentative(tenantId)
             && documentHasTenantId(tenantId)
-            && updateMetadataValid();
-          allow delete: if isOwnerOrRepresentative(tenantId);
+            && updateMetadataValid()
+            && canWriteToTenant(tenantId);
+          allow delete: if isOwnerOrRepresentative(tenantId)
+            && canWriteToTenant(tenantId);
         }
 
         // Events subcollection
@@ -170,11 +239,14 @@ service cloud.firestore {
           allow read: if isActiveMember(tenantId);
           allow create: if isActiveMember(tenantId)
             && documentHasTenantId(tenantId)
-            && auditMetadataValid();
+            && auditMetadataValid()
+            && canWriteToTenant(tenantId);
           allow update: if isActiveMember(tenantId)
             && documentHasTenantId(tenantId)
-            && updateMetadataValid();
-          allow delete: if isOwnerOrRepresentative(tenantId);
+            && updateMetadataValid()
+            && canWriteToTenant(tenantId);
+          allow delete: if isOwnerOrRepresentative(tenantId)
+            && canWriteToTenant(tenantId);
         }
       }
 
@@ -189,11 +261,14 @@ service cloud.firestore {
         allow read: if isActiveMember(tenantId);
         allow create: if isOwnerOrRepresentative(tenantId)
           && documentHasTenantId(tenantId)
-          && auditMetadataValid();
+          && auditMetadataValid()
+          && canWriteToTenant(tenantId);
         allow update: if isOwnerOrRepresentative(tenantId)
           && documentHasTenantId(tenantId)
-          && updateMetadataValid();
-        allow delete: if isOwnerOrRepresentative(tenantId);
+          && updateMetadataValid()
+          && canWriteToTenant(tenantId);
+        allow delete: if isOwnerOrRepresentative(tenantId)
+          && canWriteToTenant(tenantId);
       }
 
       // Machines collection
@@ -201,11 +276,14 @@ service cloud.firestore {
         allow read: if isActiveMember(tenantId);
         allow create: if isOwnerOrRepresentative(tenantId)
           && documentHasTenantId(tenantId)
-          && auditMetadataValid();
+          && auditMetadataValid()
+          && canWriteToTenant(tenantId);
         allow update: if isOwnerOrRepresentative(tenantId)
           && documentHasTenantId(tenantId)
-          && updateMetadataValid();
-        allow delete: if isOwnerOrRepresentative(tenantId);
+          && updateMetadataValid()
+          && canWriteToTenant(tenantId);
+        allow delete: if isOwnerOrRepresentative(tenantId)
+          && canWriteToTenant(tenantId);
       }
 
       // Team members collection
@@ -213,11 +291,14 @@ service cloud.firestore {
         allow read: if isActiveMember(tenantId);
         allow create: if isOwnerOrRepresentative(tenantId)
           && documentHasTenantId(tenantId)
-          && auditMetadataValid();
+          && auditMetadataValid()
+          && canWriteToTenant(tenantId);
         allow update: if isOwnerOrRepresentative(tenantId)
           && documentHasTenantId(tenantId)
-          && updateMetadataValid();
-        allow delete: if isOwnerOrRepresentative(tenantId);
+          && updateMetadataValid()
+          && canWriteToTenant(tenantId);
+        allow delete: if isOwnerOrRepresentative(tenantId)
+          && canWriteToTenant(tenantId);
       }
 
       // Audit logs (owner-only read, Cloud Functions write)
@@ -231,6 +312,47 @@ service cloud.firestore {
 ```
 
 ### Helper Functions Explained
+
+#### Schema Version Checking
+
+**`getSchemaVersion(tenantId)`**
+- Retrieves the current schema version for a tenant from the tenant document
+- Returns the value of the `schemaVersion` field, defaulting to 1 if not present
+- Used to check compatibility between client code and database schema
+
+**`isMigrationInProgress(tenantId)`**
+- Checks if a schema migration is currently running for the tenant
+- Returns `true` if `migrations.inProgress` field is set to `true`
+- During migrations, write operations are blocked to prevent data corruption
+- Cloud Functions set this flag before starting migrations and clear it when complete
+
+**`isSchemaCompatible(tenantId)`**
+- Validates that the tenant's schema version is compatible with current client operations
+- Currently allows schema versions 1 and 2
+- Should be updated whenever new schema versions are released
+- Clients with incompatible versions should be forced to update
+
+**`canWriteToTenant(tenantId)`**
+- Master authorization check for all write operations to tenant data
+- Blocks writes if:
+  - A migration is in progress (prevents data corruption from schema inconsistencies)
+  - Schema version is incompatible (prevents client/server version mismatch)
+- This check is integrated into all write rules for tenant collections
+- Read operations are not blocked during migrations (data remains accessible)
+
+**Why Schema Version Checking Matters:**
+- **Data Integrity**: Prevents writes during migrations when data structure is changing
+- **Version Compatibility**: Ensures clients don't write data in incompatible formats
+- **Smooth Migrations**: Allows migrations to complete without client interference
+- **User Experience**: Read access remains available during migrations, minimizing downtime
+
+**Migration Workflow:**
+1. Cloud Function sets `migrations.inProgress = true` on tenant document
+2. All client write operations are blocked by `canWriteToTenant()` check
+3. Migration runs and updates data schema
+4. Cloud Function updates `schemaVersion` to new version
+5. Cloud Function sets `migrations.inProgress = false`
+6. Client write operations resume with new schema
 
 #### Authentication Checks
 
@@ -338,6 +460,7 @@ service firebase.storage {
 
 | Collection | Owner | Representative | Team Member |
 |------------|-------|----------------|-------------|
+| tenant (root) | Read/Update* | Read | Read |
 | members | Read/Update/Delete | Read | Read |
 | invites | Read/Create/Delete | Read/Create | Read |
 | businessProfile | Read/Write | Read | Read |
@@ -351,7 +474,15 @@ service firebase.storage {
 | teamMembers | Read/Write | Read/Write | Read |
 | audit_logs | Read | None | None |
 
+*Owners can update the tenant document, but cannot modify `schemaVersion` or `migrations` fields (Cloud Functions only).
+
 ### Special Cases
+
+**Tenant Document Schema Fields:**
+- The tenant root document contains `schemaVersion` and `migrations` fields
+- These fields can only be updated by Cloud Functions (server-side)
+- Client updates to the tenant document are allowed, but cannot modify these fields
+- This ensures schema version integrity and prevents clients from bypassing migration checks
 
 **Team Member Cost Creation:**
 - Team members can create costs (high frequency operation)
@@ -468,6 +599,13 @@ function isActiveMember(tenantId) {
   return member.data.status == 'active';
 }
 ```
+
+**Schema Version Check Impact:**
+- The `canWriteToTenant()` function adds one additional document read (to fetch the tenant document)
+- This read is only performed for write operations, not reads
+- The tenant document is relatively small and frequently cached by Firestore
+- This overhead is acceptable given the protection against data corruption during migrations
+- Read operations do not incur this cost, ensuring fast data access even during migrations
 
 ### Custom Claims for Optimization
 

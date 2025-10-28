@@ -382,7 +382,397 @@ async function exportJobSubcollections(tenantId: string, subcollection: string):
 
 ---
 
+#### migrateSchema
+
+Tenant-level schema migration with progress tracking and rollback support.
+
+```typescript
+// packages/functions/src/callable/migrateSchema.ts
+
+export const migrateSchema = onCall<MigrateSchemaRequest>(
+  async (request) => {
+    const { tenantId, targetVersion, dryRun = false } = request.data;
+    const uid = request.auth?.uid;
+
+    if (!uid || !tenantId) {
+      throw new HttpsError('unauthenticated', 'User must be authenticated');
+    }
+
+    // Verify owner role (only owners can trigger migrations)
+    const memberDoc = await admin.firestore()
+      .doc(`tenants/${tenantId}/members/${uid}`)
+      .get();
+
+    if (!memberDoc.exists || memberDoc.data()?.role !== 'owner') {
+      throw new HttpsError('permission-denied', 'Owner role required for migrations');
+    }
+
+    const db = admin.firestore();
+    const tenantRef = db.doc(`tenants/${tenantId}`);
+    const tenantDoc = await tenantRef.get();
+
+    if (!tenantDoc.exists) {
+      throw new HttpsError('not-found', 'Tenant not found');
+    }
+
+    const currentVersion = tenantDoc.data()?.schemaVersion || 1;
+
+    // Validate migration path
+    if (targetVersion <= currentVersion) {
+      throw new HttpsError('failed-precondition',
+        `Cannot migrate to v${targetVersion}. Current version is v${currentVersion}`);
+    }
+
+    if (targetVersion - currentVersion > 1) {
+      throw new HttpsError('failed-precondition',
+        `Cannot skip versions. Migrate to v${currentVersion + 1} first`);
+    }
+
+    // Check if migration already in progress
+    const migrations = tenantDoc.data()?.migrations || {};
+    if (migrations[targetVersion]?.status === 'in_progress') {
+      throw new HttpsError('failed-precondition',
+        `Migration to v${targetVersion} already in progress`);
+    }
+
+    if (dryRun) {
+      // Dry run: estimate documents to migrate
+      const estimate = await estimateMigration(tenantId, targetVersion);
+      return {
+        dryRun: true,
+        currentVersion,
+        targetVersion,
+        estimatedDocuments: estimate.totalDocuments,
+        estimatedDuration: estimate.estimatedMinutes,
+        collections: estimate.collections
+      };
+    }
+
+    // Mark migration as in_progress
+    await tenantRef.update({
+      [`migrations.${targetVersion}`]: {
+        appliedAt: admin.firestore.FieldValue.serverTimestamp(),
+        appliedBy: uid,
+        status: 'in_progress',
+        documentsProcessed: 0,
+        error: null
+      }
+    });
+
+    // Execute migration (async, non-blocking)
+    executeMigration(tenantId, currentVersion, targetVersion, uid)
+      .then(async (result) => {
+        // Update tenant with new schema version
+        await tenantRef.update({
+          schemaVersion: targetVersion,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          [`migrations.${targetVersion}.status`]: 'completed',
+          [`migrations.${targetVersion}.documentsProcessed`]: result.documentsProcessed
+        });
+        console.log(`Migration to v${targetVersion} completed for tenant ${tenantId}`);
+      })
+      .catch(async (error) => {
+        // Mark migration as failed
+        await tenantRef.update({
+          [`migrations.${targetVersion}.status`]: 'failed',
+          [`migrations.${targetVersion}.error`]: error.message
+        });
+        console.error(`Migration to v${targetVersion} failed for tenant ${tenantId}:`, error);
+      });
+
+    return {
+      dryRun: false,
+      currentVersion,
+      targetVersion,
+      status: 'in_progress',
+      message: 'Migration started. Check migration status in tenant document.'
+    };
+  }
+);
+
+interface MigrateSchemaRequest {
+  tenantId: string;
+  targetVersion: number;
+  dryRun?: boolean;
+}
+
+// Helper: Estimate migration scope
+async function estimateMigration(
+  tenantId: string,
+  targetVersion: number
+): Promise<MigrationEstimate> {
+  const db = admin.firestore();
+  const migrator = getMigrator(targetVersion);
+
+  const collections = await migrator.getAffectedCollections(tenantId);
+  let totalDocuments = 0;
+
+  const collectionCounts: Record<string, number> = {};
+
+  for (const collectionPath of collections) {
+    const snapshot = await db.collection(collectionPath).count().get();
+    const count = snapshot.data().count;
+    collectionCounts[collectionPath] = count;
+    totalDocuments += count;
+  }
+
+  // Estimate: ~100 documents per second
+  const estimatedMinutes = Math.ceil(totalDocuments / 100 / 60);
+
+  return {
+    totalDocuments,
+    estimatedMinutes,
+    collections: collectionCounts
+  };
+}
+
+interface MigrationEstimate {
+  totalDocuments: number;
+  estimatedMinutes: number;
+  collections: Record<string, number>;
+}
+
+// Helper: Execute migration
+async function executeMigration(
+  tenantId: string,
+  fromVersion: number,
+  toVersion: number,
+  triggeredBy: string
+): Promise<{ documentsProcessed: number }> {
+  const migrator = getMigrator(toVersion);
+  return await migrator.migrate(tenantId, triggeredBy);
+}
+
+// Helper: Get migrator for target version
+function getMigrator(targetVersion: number): SchemaMigrator {
+  switch (targetVersion) {
+    case 2:
+      return new MigratorV1toV2();
+    case 3:
+      return new MigratorV2toV3();
+    default:
+      throw new Error(`No migrator available for version ${targetVersion}`);
+  }
+}
+
+// Base migrator interface
+interface SchemaMigrator {
+  migrate(tenantId: string, triggeredBy: string): Promise<{ documentsProcessed: number }>;
+  rollback(tenantId: string): Promise<void>;
+  getAffectedCollections(tenantId: string): Promise<string[]>;
+}
+
+// Example: Migration from v1 to v2 (template)
+class MigratorV1toV2 implements SchemaMigrator {
+  async migrate(tenantId: string, triggeredBy: string): Promise<{ documentsProcessed: number }> {
+    const db = admin.firestore();
+    let totalProcessed = 0;
+
+    // Example: Add new field to all jobs
+    const jobsRef = db.collection(`tenants/${tenantId}/jobs`);
+    const jobsSnapshot = await jobsRef.get();
+
+    const batchSize = 500;
+    let batch = db.batch();
+    let batchCount = 0;
+
+    for (const jobDoc of jobsSnapshot.docs) {
+      const data = jobDoc.data();
+
+      // Migration logic: Add new fields, transform data, etc.
+      batch.update(jobDoc.ref, {
+        // Example: Add multi-currency support
+        primaryCurrency: data.currency || 'CZK',
+        currencies: [data.currency || 'CZK'],
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+
+      batchCount++;
+      totalProcessed++;
+
+      // Commit batch every 500 operations
+      if (batchCount >= batchSize) {
+        await batch.commit();
+        batch = db.batch();
+        batchCount = 0;
+
+        // Update progress in tenant document
+        await db.doc(`tenants/${tenantId}`).update({
+          'migrations.2.documentsProcessed': totalProcessed
+        });
+      }
+    }
+
+    // Commit remaining operations
+    if (batchCount > 0) {
+      await batch.commit();
+    }
+
+    return { documentsProcessed: totalProcessed };
+  }
+
+  async rollback(tenantId: string): Promise<void> {
+    // Rollback logic: restore original schema
+    const db = admin.firestore();
+    const jobsRef = db.collection(`tenants/${tenantId}/jobs`);
+    const jobsSnapshot = await jobsRef.get();
+
+    const batch = db.batch();
+    for (const jobDoc of jobsSnapshot.docs) {
+      batch.update(jobDoc.ref, {
+        primaryCurrency: admin.firestore.FieldValue.delete(),
+        currencies: admin.firestore.FieldValue.delete()
+      });
+    }
+
+    await batch.commit();
+  }
+
+  async getAffectedCollections(tenantId: string): Promise<string[]> {
+    return [
+      `tenants/${tenantId}/jobs`,
+      `tenants/${tenantId}/vehicles`,
+      `tenants/${tenantId}/machines`
+    ];
+  }
+}
+```
+
+**Usage from Admin UI:**
+
+```typescript
+// Dry run first to estimate scope
+const estimate = await migrateSchema({
+  tenantId: 'tenant-123',
+  targetVersion: 2,
+  dryRun: true
+});
+
+console.log(`Migration will process ${estimate.estimatedDocuments} documents`);
+console.log(`Estimated duration: ${estimate.estimatedDuration} minutes`);
+
+// Trigger actual migration
+const result = await migrateSchema({
+  tenantId: 'tenant-123',
+  targetVersion: 2,
+  dryRun: false
+});
+
+// Monitor progress by watching tenant document
+const unsubscribe = onSnapshot(
+  doc(firestore, `tenants/tenant-123`),
+  (snapshot) => {
+    const migrations = snapshot.data()?.migrations;
+    const migration = migrations?.[2];
+
+    if (migration?.status === 'completed') {
+      console.log('Migration completed!');
+      unsubscribe();
+    } else if (migration?.status === 'failed') {
+      console.error('Migration failed:', migration.error);
+      unsubscribe();
+    } else if (migration?.status === 'in_progress') {
+      console.log(`Processed: ${migration.documentsProcessed} documents`);
+    }
+  }
+);
+```
+
+---
+
 ### Scheduled Functions
+
+#### checkSchemaMigrations
+
+Daily check for tenants requiring schema migrations or running migrations that have stalled.
+
+```typescript
+// packages/functions/src/scheduled/checkSchemaMigrations.ts
+
+export const checkSchemaMigrations = onSchedule(
+  {
+    schedule: 'every day 04:00',
+    timeZone: 'Europe/Prague',
+    region: 'europe-west1'
+  },
+  async (event) => {
+    const db = admin.firestore();
+    const CURRENT_SCHEMA_VERSION = 1; // Update as new versions are released
+    const STALLED_THRESHOLD_HOURS = 4;
+
+    const tenantsSnapshot = await db.collection('tenants').get();
+
+    for (const tenantDoc of tenantsSnapshot.docs) {
+      const tenantId = tenantDoc.id;
+      const data = tenantDoc.data();
+      const schemaVersion = data.schemaVersion || 1;
+      const migrations = data.migrations || {};
+
+      // Check for outdated schema versions
+      if (schemaVersion < CURRENT_SCHEMA_VERSION) {
+        const versionsOutdated = CURRENT_SCHEMA_VERSION - schemaVersion;
+        console.warn(
+          `Tenant ${tenantId} is ${versionsOutdated} version(s) behind (current: v${schemaVersion}, latest: v${CURRENT_SCHEMA_VERSION})`
+        );
+
+        // Notify tenant owners (send email, in-app notification, etc.)
+        await notifyTenantOwners(tenantId, {
+          type: 'schema_outdated',
+          message: `Your data schema is outdated. Please migrate to v${CURRENT_SCHEMA_VERSION}.`,
+          currentVersion: schemaVersion,
+          targetVersion: CURRENT_SCHEMA_VERSION
+        });
+      }
+
+      // Check for stalled migrations
+      for (const [version, migration] of Object.entries(migrations)) {
+        if (migration.status === 'in_progress') {
+          const appliedAt = migration.appliedAt.toDate();
+          const hoursSince = (Date.now() - appliedAt.getTime()) / (1000 * 60 * 60);
+
+          if (hoursSince > STALLED_THRESHOLD_HOURS) {
+            console.error(
+              `Migration to v${version} for tenant ${tenantId} has been in progress for ${hoursSince.toFixed(1)} hours`
+            );
+
+            // Mark as failed and notify
+            await db.doc(`tenants/${tenantId}`).update({
+              [`migrations.${version}.status`]: 'failed',
+              [`migrations.${version}.error`]: 'Migration stalled (exceeded 4-hour threshold)'
+            });
+
+            await notifyTenantOwners(tenantId, {
+              type: 'migration_failed',
+              message: `Schema migration to v${version} has failed. Please contact support.`,
+              version: parseInt(version),
+              error: 'Migration stalled'
+            });
+          }
+        }
+      }
+    }
+
+    console.log('Schema migration check completed');
+  }
+);
+
+async function notifyTenantOwners(tenantId: string, notification: any): Promise<void> {
+  // Implementation: Send email, push notification, or create in-app notification
+  const db = admin.firestore();
+  const membersSnapshot = await db
+    .collection(`tenants/${tenantId}/members`)
+    .where('role', '==', 'owner')
+    .get();
+
+  for (const memberDoc of membersSnapshot.docs) {
+    // Send notification to owner
+    console.log(`Notifying owner ${memberDoc.id} of tenant ${tenantId}:`, notification);
+    // TODO: Implement actual notification mechanism (email, FCM, etc.)
+  }
+}
+```
+
+---
 
 #### cleanupAuditLogs
 
@@ -544,9 +934,11 @@ export * from './triggers/assignSequence';
 export * from './callable/allocateSequence';
 export * from './callable/createMember';
 export * from './callable/exportData';
+export * from './callable/migrateSchema';
 
 // Scheduled functions
 export * from './scheduled/cleanupAuditLogs';
+export * from './scheduled/checkSchemaMigrations';
 ```
 
 ---

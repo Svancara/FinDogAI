@@ -250,4 +250,295 @@ Note: Role authorization is NOT in custom claims. It's enforced by Security Rule
 
 ---
 
+## 2.5 Schema Evolution Strategy
+
+### 2.5.1 Overview
+
+FinDogAI implements tenant-level schema versioning to safely evolve the data model over time. This approach enables zero-downtime migrations, gradual rollouts, and backwards compatibility.
+
+### 2.5.2 Tenant-Level Versioning
+
+Each tenant maintains its own schema version independently:
+
+```typescript
+// /tenants/{tenantId}
+{
+  tenantId: "550e8400-e29b-41d4-a716-446655440000",
+  schemaVersion: 1,
+  createdAt: Timestamp,
+  updatedAt: Timestamp,
+  migrations: {
+    2: {
+      appliedAt: Timestamp,
+      appliedBy: "admin-uid",
+      status: "completed",
+      documentsProcessed: 2500
+    }
+  }
+}
+```
+
+**Benefits:**
+- Migrate tenants incrementally (10-50 at a time)
+- Rollback individual tenants if migration fails
+- Test migrations in production with pilot tenants
+- No forced downtime for all users simultaneously
+
+### 2.5.3 Version Compatibility Requirements
+
+**Client Compatibility Matrix:**
+
+| Client Version | Min Schema | Max Schema | Status |
+|----------------|-----------|-----------|--------|
+| 1.0.x | v1 | v1 | Current |
+| 1.1.x | v1 | v2 | Future: Dual-mode support |
+| 2.0.x | v2 | v3 | Future: Drops v1 |
+
+**Version Check Flow:**
+
+```
+1. App starts → Check tenant schema version
+2. If schemaVersion < minSupported:
+   → Show "Please contact support" message
+   → Block app usage
+3. If schemaVersion > maxSupported:
+   → Show "Update required" message
+   → Redirect to app store
+4. If minSupported ≤ schemaVersion ≤ maxSupported:
+   → Proceed with appropriate schema adapter
+```
+
+### 2.5.4 Backwards Compatibility Approach
+
+**Read Path (Clients must support N and N+1):**
+
+```typescript
+// Client reads both old and new schema formats
+interface JobReader {
+  read(doc: DocumentSnapshot): Job {
+    const data = doc.data();
+    const version = data.schemaVersion || 1;
+
+    switch (version) {
+      case 1:
+        return this.readV1(data);
+      case 2:
+        return this.readV2(data);
+      default:
+        throw new Error(`Unsupported schema version: ${version}`);
+    }
+  }
+
+  private readV1(data: any): Job {
+    return {
+      id: data.id,
+      currency: data.currency || 'CZK',
+      // Map v1 fields to common interface
+    };
+  }
+
+  private readV2(data: any): Job {
+    return {
+      id: data.id,
+      currency: data.primaryCurrency,
+      currencies: data.currencies,
+      // Map v2 fields to common interface
+    };
+  }
+}
+```
+
+**Write Path (Migration function transforms):**
+
+```typescript
+// Client writes in its supported version
+// Migration function transforms data to new schema
+async function migrateV1toV2(job: JobV1): Promise<JobV2> {
+  return {
+    ...job,
+    primaryCurrency: job.currency,
+    currencies: [job.currency],
+    schemaVersion: 2
+  };
+}
+```
+
+### 2.5.5 Zero-Downtime Migration Strategy
+
+**Migration Process:**
+
+1. **Pre-Migration (T-1 week)**
+   - Deploy client v1.1 with dual-schema support (reads v1 and v2)
+   - All users gradually update to v1.1
+   - Monitor adoption rate (target: 95% within 1 week)
+
+2. **Migration Phase (T+0)**
+   - Select pilot tenants (5-10 small tenants)
+   - Run `migrateSchema` with `dryRun: true` to estimate scope
+   - Execute migration for pilot tenants
+   - Monitor for errors, performance issues, user feedback
+   - If successful, proceed to batch migration
+
+3. **Batch Migration (T+1 day)**
+   - Migrate tenants in batches of 10-50
+   - Schedule migrations during off-peak hours (2-4 AM CET)
+   - Monitor each batch completion before proceeding
+   - Automatic rollback if error rate > 5%
+
+4. **Post-Migration (T+1 week)**
+   - Verify all tenants migrated successfully
+   - Monitor application errors and performance
+   - Notify any remaining tenants on old schema
+
+5. **Deprecation (T+3 months)**
+   - Mark v1 schema as deprecated
+   - Client v2.0 drops v1 support
+   - Force-migrate any remaining v1 tenants
+
+### 2.5.6 Handling Mixed Versions During Migration
+
+**Scenario: Tenant on v1, Migration to v2 in Progress**
+
+```
+Time T0: Tenant starts on v1
+├─ App reads v1 data normally
+├─ App writes v1 data normally
+│
+Time T1: Migration triggered
+├─ Tenant document updated: migrations.2.status = 'in_progress'
+├─ Client detects migration in progress
+├─ App shows banner: "Updating data format..."
+├─ Migration function processes documents in batches
+│  └─ Each batch: 500 documents updated
+│     └─ Progress tracked: migrations.2.documentsProcessed
+│
+Time T2: Migration completes
+├─ Tenant document updated: schemaVersion = 2
+├─ migrations.2.status = 'completed'
+├─ Client switches to v2 read/write adapters
+├─ Banner dismissed: "Update complete"
+│
+Time T3: Normal operation on v2
+└─ App reads v2 data
+   └─ App writes v2 data
+```
+
+**Client Behavior During Migration:**
+
+```typescript
+async function checkMigrationStatus(tenantId: string): Promise<MigrationStatus> {
+  const tenantDoc = await firestore.doc(`tenants/${tenantId}`).get();
+  const data = tenantDoc.data();
+  const schemaVersion = data.schemaVersion || 1;
+  const migrations = data.migrations || {};
+
+  // Check if any migration is in progress
+  for (const [version, migration] of Object.entries(migrations)) {
+    if (migration.status === 'in_progress') {
+      return {
+        inProgress: true,
+        targetVersion: parseInt(version),
+        currentVersion: schemaVersion,
+        progress: migration.documentsProcessed || 0
+      };
+    }
+  }
+
+  return {
+    inProgress: false,
+    currentVersion: schemaVersion
+  };
+}
+
+// Periodic check (every 30 seconds during migration)
+const migrationStatus = await checkMigrationStatus(tenantId);
+if (migrationStatus.inProgress) {
+  showMigrationBanner(`Updating data... ${migrationStatus.progress} documents processed`);
+} else {
+  hideMigrationBanner();
+}
+```
+
+### 2.5.7 Testing Migration Procedures
+
+**Pre-Production Testing:**
+
+1. **Unit Tests**: Test migration logic with sample data
+2. **Integration Tests**: Test migration on emulator with full dataset
+3. **Staging Tests**: Run migration on staging environment
+4. **Pilot Tenants**: Migrate 5-10 real tenants in production
+5. **Validation**: Compare data before/after migration
+
+**Test Checklist:**
+
+```typescript
+// packages/functions/src/tests/migration.test.ts
+
+describe('Migration v1 to v2', () => {
+  it('should transform v1 job to v2 format', async () => {
+    const v1Job = {
+      id: 'job-1',
+      currency: 'CZK',
+      // ... other v1 fields
+    };
+
+    const v2Job = await migrateJobV1toV2(v1Job);
+
+    expect(v2Job.primaryCurrency).toBe('CZK');
+    expect(v2Job.currencies).toEqual(['CZK']);
+    expect(v2Job.schemaVersion).toBe(2);
+  });
+
+  it('should handle missing fields gracefully', async () => {
+    const v1Job = { id: 'job-1' }; // Missing currency
+
+    const v2Job = await migrateJobV1toV2(v1Job);
+
+    expect(v2Job.primaryCurrency).toBe('CZK'); // Default
+    expect(v2Job.currencies).toEqual(['CZK']);
+  });
+
+  it('should process 1000 documents in <10 seconds', async () => {
+    const startTime = Date.now();
+    await migrateBatch(tenantId, 1000);
+    const duration = Date.now() - startTime;
+
+    expect(duration).toBeLessThan(10000);
+  });
+});
+```
+
+### 2.5.8 Version Deprecation Policy
+
+**Lifecycle Timeline:**
+
+| Phase | Timeline | Action |
+|-------|----------|--------|
+| **Release** | T+0 | v2 released, v1 fully supported |
+| **Adoption** | T+1 week | Pilot migrations, monitor feedback |
+| **Batch Migration** | T+2 weeks | Migrate remaining tenants in batches |
+| **Deprecation Notice** | T+3 months | Mark v1 deprecated, encourage migration |
+| **Migration Window** | T+6 months | All tenants should be on v2 |
+| **End of Support** | T+12 months | Drop v1 client support, force-migrate remaining |
+
+**Communication Strategy:**
+
+1. **Email Notifications**:
+   - T+0: "New features available, update recommended"
+   - T+3 months: "Your schema version is deprecated, please migrate"
+   - T+6 months: "Final reminder: Migration required by T+12 months"
+   - T+11 months: "Forced migration scheduled in 1 month"
+
+2. **In-App Banners**:
+   - T+3 months: Dismissible info banner
+   - T+6 months: Persistent warning banner
+   - T+11 months: Blocking modal with countdown
+
+3. **Admin Dashboard**:
+   - Display current schema version
+   - Show migration status for all tenants (admin-only)
+   - One-click migration trigger (with dry-run preview)
+
+---
+
 [Back to Index](./index.md) | [Next: Firebase Services →](./firebase-services.md)
