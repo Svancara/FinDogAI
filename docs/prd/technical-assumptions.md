@@ -68,7 +68,7 @@
 
 4. **Manual Testing (Essential):**
    - Voice recognition accuracy in real environments (car cabin, outdoor noise)
-   - Glove usability testing (touch target sizes, button discoverability)
+   - Touch interface usability testing (touch target sizes, button discoverability)
    - Multi-device sync validation (phone + tablet)
 
 **NOT in MVP:**
