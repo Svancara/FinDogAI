@@ -57,6 +57,8 @@
 
 **FR24:** The system shall implement tenant-level schema versioning to support safe database evolution. Each tenant document shall include a schemaVersion field (starting at 1) and track migration history. Client applications shall verify schema compatibility on startup, supporting current version N and next version N+1 for zero-downtime migrations. Schema migrations shall run per-tenant via Cloud Functions with dry-run capability, progress tracking, and rollback support. The system shall maintain backwards compatibility for 12 months per version deprecation policy.
 
+**FR25:** The system shall implement single-resource auto-selection for cost entry forms. When a tenant has exactly one resource of a given type (vehicle, team member, or machine), the UI shall automatically select that resource and hide the selection dropdown, displaying the resource information as read-only text instead. This applies to all cost entry forms (Transport, Labor, Machine) in both manual and voice flows, improving UX by eliminating unnecessary selection steps when only one choice exists.
+
 
 
 ### Non-Functional Requirements

@@ -432,6 +432,139 @@ constructor() {
 9. **Loading States**: Show spinners for async operations
 10. **Empty States**: Handle no-data scenarios gracefully
 
+## Single Resource Auto-Selection Pattern
+
+When displaying resource selection controls (vehicles, team members, machines), implement auto-selection for single-resource scenarios:
+
+### Pattern Overview
+
+```typescript
+@Component({
+  selector: 'app-transport-cost-form',
+  template: `
+    <!-- Single resource: show as read-only text -->
+    @if (vehicles().length === 1) {
+      <div class="resource-info">
+        <ion-label>Vehicle</ion-label>
+        <p class="readonly-value">[{{ vehicles()[0].vehicleNumber }}] {{ vehicles()[0].name }}</p>
+      </div>
+    }
+
+    <!-- Multiple resources: show dropdown -->
+    @else if (vehicles().length > 1) {
+      <ion-item>
+        <ion-label>Vehicle</ion-label>
+        <ion-select [(ngModel)]="selectedVehicleId" interface="popover">
+          @for (vehicle of vehicles(); track vehicle.id) {
+            <ion-select-option [value]="vehicle.id">
+              [{{ vehicle.vehicleNumber }}] {{ vehicle.name }}
+            </ion-select-option>
+          }
+        </ion-select>
+      </ion-item>
+    }
+
+    <!-- No resources: show warning -->
+    @else {
+      <ion-item color="warning">
+        <ion-label>No vehicles available. Add one in Settings.</ion-label>
+      </ion-item>
+    }
+  `
+})
+export class TransportCostFormComponent {
+  protected readonly vehicles = signal<Vehicle[]>([]);
+  protected readonly selectedVehicleId = signal<string | null>(null);
+
+  // Computed: auto-select if single resource
+  protected readonly selectedVehicle = computed(() => {
+    const vehicleList = this.vehicles();
+    if (vehicleList.length === 1) {
+      return vehicleList[0]; // Auto-select single vehicle
+    }
+    return vehicleList.find(v => v.id === this.selectedVehicleId()) || null;
+  });
+
+  ngOnInit(): void {
+    // Auto-select when vehicles load
+    this.vehiclesService.getVehicles(this.tenantId).subscribe(vehicles => {
+      this.vehicles.set(vehicles);
+      if (vehicles.length === 1) {
+        this.selectedVehicleId.set(vehicles[0].id);
+      }
+    });
+  }
+}
+```
+
+### Usage Guidelines
+
+1. **Check Resource Count**: Always check if `resources.length === 1` before rendering UI
+2. **Auto-Select on Load**: Set selected ID automatically when single resource detected
+3. **Display as Read-Only**: Show resource info as read-only text (not disabled dropdown)
+4. **Consistent Format**: Use `[resourceNumber] Name` format for all resources
+5. **Apply to All Resource Types**: Use for vehicles, team members, and machines
+6. **Edit Forms**: Apply same logic when editing costs (single → read-only, multiple → dropdown)
+7. **Empty State**: If zero resources, show helpful message with link to settings
+
+### Complete Example
+
+```typescript
+export class LaborCostFormComponent {
+  private readonly teamMembersService = inject(TeamMembersService);
+
+  protected readonly teamMembers = signal<TeamMember[]>([]);
+  protected readonly selectedMemberId = signal<string | null>(null);
+
+  // Computed properties
+  protected readonly hasSingleMember = computed(() =>
+    this.teamMembers().length === 1
+  );
+
+  protected readonly selectedMember = computed(() => {
+    const members = this.teamMembers();
+    if (members.length === 1) {
+      return members[0];
+    }
+    return members.find(m => m.id === this.selectedMemberId()) || null;
+  });
+
+  ngOnInit(): void {
+    this.teamMembersService.getTeamMembers(this.tenantId).pipe(
+      takeUntilDestroyed()
+    ).subscribe(members => {
+      this.teamMembers.set(members);
+      // Auto-select if single member
+      if (members.length === 1) {
+        this.selectedMemberId.set(members[0].id);
+      }
+    });
+  }
+
+  protected onSave(): void {
+    const member = this.selectedMember();
+    if (!member) {
+      this.showError('Please select a team member');
+      return;
+    }
+
+    const cost: Partial<LaborCost> = {
+      category: 'labor',
+      teamMember: {
+        teamMemberNumber: member.teamMemberNumber,
+        name: member.name,
+        hourlyRate: member.hourlyRate
+      },
+      hours: this.hoursControl.value,
+      amount: this.hoursControl.value * member.hourlyRate,
+      // ... other fields
+    };
+
+    this.saveCost(cost);
+  }
+}
+```
+
 ## Component Checklist
 
 Before committing a component, ensure:

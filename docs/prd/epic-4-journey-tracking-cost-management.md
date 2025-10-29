@@ -63,17 +63,18 @@
 1. Job Detail screen has "Add Cost" button → opens category selector (Transport, Material, Labor, Machine, Other)
 2. Select "Transport" → opens Transport Cost entry form (job context is implicit - current job from Job Detail screen)
 3. Form fields: Vehicle (dropdown showing `[vehicleNumber] Name`), **Input Mode toggle (Distance / Manual Amount)**, Description (optional text), Date/Time (default: now)
-4. **Distance Mode:** Distance in km/miles (number with unit label from businessProfile), Amount auto-calculated (distance × vehicle.ratePerDistanceUnit) displayed read-only
-5. **Manual Amount Mode:** Amount (number with currency), Distance field hidden, Vehicle still required
-6. On save, cost created in `/tenants/{tenantId}/jobs/{jobId}/costs/{costId}` where jobId is the current job context
-7. Cost document: ordinalNumber (sequence), category: "transport", amount, vehicle: {full vehicle object copy with vehicleNumber, name, distanceUnit, ratePerDistanceUnit}, distance (null if manual amount mode), description, timestamp, createdAt, createdBy: {uid, memberNumber, displayName}
-8. Cost displayed in Job Detail → Costs tab: "[ordinalNumber] Transport - [vehicleNumber] Vehicle Name - X [unit] - Y CZK" (or "- Y CZK" if distance is null; unit label from businessProfile)
-9. Edit cost: Tap cost item → opens form pre-filled with original mode (distance/manual), allows updates to distance/amount/description/vehicle, job context remains unchanged
-10. Delete cost: Swipe left or long-press → confirmation: "Delete cost [ordinalNumber]?" → removes from Firestore
-11. Job financial summary updates: Total costs recalculated, budget remaining updated
-12. Offline mode: Cost CRUD works without network, syncs when online
-13. Validation: If Distance Mode, distance must be positive number and vehicle must be selected; if Manual Amount Mode, amount must be positive number and vehicle must be selected
-14. **Use case clarification:** Distance Mode allows user to enter "I drove 50 [unit] today" (without odometer readings); unit label from businessProfile; system calculates cost from vehicle rate
+4. **Single Vehicle Auto-Selection:** If tenant has exactly one vehicle, skip vehicle dropdown entirely and auto-select that vehicle; display vehicle info as read-only text "[vehicleNumber] Name" below form header; vehicle is pre-populated in cost data; user can still access all vehicles via Settings if they want to add more
+5. **Distance Mode:** Distance in km/miles (number with unit label from businessProfile), Amount auto-calculated (distance × vehicle.ratePerDistanceUnit) displayed read-only
+6. **Manual Amount Mode:** Amount (number with currency), Distance field hidden, Vehicle still required (or auto-selected if single vehicle)
+7. On save, cost created in `/tenants/{tenantId}/jobs/{jobId}/costs/{costId}` where jobId is the current job context
+8. Cost document: ordinalNumber (sequence), category: "transport", amount, vehicle: {full vehicle object copy with vehicleNumber, name, distanceUnit, ratePerDistanceUnit}, distance (null if manual amount mode), description, timestamp, createdAt, createdBy: {uid, memberNumber, displayName}
+9. Cost displayed in Job Detail → Costs tab: "[ordinalNumber] Transport - [vehicleNumber] Vehicle Name - X [unit] - Y CZK" (or "- Y CZK" if distance is null; unit label from businessProfile)
+10. Edit cost: Tap cost item → opens form pre-filled with original mode (distance/manual), allows updates to distance/amount/description/vehicle (vehicle field is dropdown if multiple vehicles, read-only if single vehicle), job context remains unchanged
+11. Delete cost: Swipe left or long-press → confirmation: "Delete cost [ordinalNumber]?" → removes from Firestore
+12. Job financial summary updates: Total costs recalculated, budget remaining updated
+13. Offline mode: Cost CRUD works without network, syncs when online
+14. Validation: If Distance Mode, distance must be positive number and vehicle must be selected; if Manual Amount Mode, amount must be positive number and vehicle must be selected
+15. **Use case clarification:** Distance Mode allows user to enter "I drove 50 [unit] today" (without odometer readings); unit label from businessProfile; system calculates cost from vehicle rate
 
 ### Story 4.4: Manual Cost Entry - Material, Labor, Machine, Other Categories
 
@@ -89,20 +90,22 @@
 4. **Material Total Amount Mode:** Amount (number with currency), Quantity and Unit Price fields hidden
 5. Material cost document: ordinalNumber, category: "material", amount, quantity (null if total amount mode), unitPrice (null if total amount mode), description, supplier, timestamp, createdAt, createdBy: {uid, memberNumber, displayName}
 6. **Labor form:** Team Member (dropdown `[teamMemberNumber] Name`), **Input Mode toggle (Hours / Manual Amount)**, Description (optional), Date/Time
-7. **Labor Hours Mode:** Hours (number), Amount auto-calculated (hours × teamMember.hourlyRate) displayed read-only
-8. **Labor Manual Amount Mode:** Amount (number with currency), Hours field hidden, Team Member still required
-9. Labor cost document: ordinalNumber, category: "labor", amount, teamMember: {full team member object copy}, hours (null if manual amount mode), description, timestamp, createdAt, createdBy: {uid, memberNumber, displayName}
-10. **Machine form:** Machine (dropdown `[machineNumber] Name`), **Input Mode toggle (Hours / Manual Amount)**, Description (optional), Date/Time
-11. **Machine Hours Mode:** Hours (number), Amount auto-calculated (hours × machine.hourlyRate) displayed read-only
-12. **Machine Manual Amount Mode:** Amount (number with currency), Hours field hidden, Machine still required
-13. Machine cost document: ordinalNumber, category: "machine", amount, machine: {full machine object copy}, hours (null if manual amount mode), description, timestamp, createdAt, createdBy: {uid, memberNumber, displayName}
-14. **Other form:** Amount (number with currency), Description (required), Date/Time
-15. Other cost document: ordinalNumber, category: "other", amount, description, timestamp, createdAt, createdBy: {uid, memberNumber, displayName}
-16. All costs saved to `/tenants/{tenantId}/jobs/{jobId}/costs/{costId}` where jobId is the current job context
-17. All categories support Edit (update amount/description/resource, mode preserved from creation, job context remains unchanged) and Delete (with confirmation)
-18. Job Detail → Costs tab displays costs grouped by category with sequential ordinalNumbers and totals per category
-19. Cost display shows calculated details when available: "Transport - 50 km - 250 CZK" vs "Transport - 250 CZK" (manual), "Material - 10 units × 5 CZK - 50 CZK" vs "Material - 50 CZK" (manual)
-20. Privilege enforcement: If membership.status != 'active', "Add Cost" button hidden/disabled
+7. **Single Team Member Auto-Selection:** If tenant has exactly one team member, skip team member dropdown entirely and auto-select that member; display member info as read-only text "[teamMemberNumber] Name" below form header; member is pre-populated in cost data
+8. **Labor Hours Mode:** Hours (number), Amount auto-calculated (hours × teamMember.hourlyRate) displayed read-only
+9. **Labor Manual Amount Mode:** Amount (number with currency), Hours field hidden, Team Member still required (or auto-selected if single member)
+10. Labor cost document: ordinalNumber, category: "labor", amount, teamMember: {full team member object copy}, hours (null if manual amount mode), description, timestamp, createdAt, createdBy: {uid, memberNumber, displayName}
+11. **Machine form:** Machine (dropdown `[machineNumber] Name`), **Input Mode toggle (Hours / Manual Amount)**, Description (optional), Date/Time
+12. **Single Machine Auto-Selection:** If tenant has exactly one machine, skip machine dropdown entirely and auto-select that machine; display machine info as read-only text "[machineNumber] Name" below form header; machine is pre-populated in cost data
+13. **Machine Hours Mode:** Hours (number), Amount auto-calculated (hours × machine.hourlyRate) displayed read-only
+14. **Machine Manual Amount Mode:** Amount (number with currency), Hours field hidden, Machine still required (or auto-selected if single machine)
+15. Machine cost document: ordinalNumber, category: "machine", amount, machine: {full machine object copy}, hours (null if manual amount mode), description, timestamp, createdAt, createdBy: {uid, memberNumber, displayName}
+16. **Other form:** Amount (number with currency), Description (required), Date/Time
+17. Other cost document: ordinalNumber, category: "other", amount, description, timestamp, createdAt, createdBy: {uid, memberNumber, displayName}
+18. All costs saved to `/tenants/{tenantId}/jobs/{jobId}/costs/{costId}` where jobId is the current job context
+19. All categories support Edit (update amount/description/resource, mode preserved from creation, job context remains unchanged); on Edit, resource field is dropdown if multiple resources exist, read-only if single resource exists
+20. Job Detail → Costs tab displays costs grouped by category with sequential ordinalNumbers and totals per category
+21. Cost display shows calculated details when available: "Transport - 50 km - 250 CZK" vs "Transport - 250 CZK" (manual), "Material - 10 units × 5 CZK - 50 CZK" vs "Material - 50 CZK" (manual)
+22. Privilege enforcement: If membership.status != 'active', "Add Cost" button hidden/disabled
 
 ### Story 4.5: Advances Tracking
 

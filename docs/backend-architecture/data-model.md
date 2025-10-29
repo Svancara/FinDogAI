@@ -573,6 +573,8 @@ User (1) ──< UserTenantMappings (N)
 
 4. **Nullable Sequential Numbers**: Documents created offline have `null` sequential numbers until server-side assignment completes.
 
+5. **Single Resource Auto-Selection**: Client applications should query resource collections (vehicles, team members, machines) and automatically select the resource if exactly one exists. This improves UX by eliminating unnecessary selection steps. Backend remains unchanged - this is purely a client-side optimization based on collection count queries.
+
 ---
 
 ## 4.3 Required Indexes
@@ -641,15 +643,19 @@ firebase deploy --only firestore:indexes
 
 Understanding access patterns helps optimize queries and indexes:
 
-| Collection | Read Pattern | Write Pattern | Offline Support |
-|------------|--------------|---------------|-----------------|
-| tenants/{tid}/members | Startup, auth check | Admin only | No (requires online) |
-| tenants/{tid}/jobs | List view, filters | CRUD by owner/rep | Yes (full offline) |
-| tenants/{tid}/jobs/{jid}/costs | Job detail view | High frequency | Yes (full offline) |
-| tenants/{tid}/vehicles | Resource selector | Low frequency | Yes (cached) |
-| tenants/{tid}/audit_logs | Admin export only | Auto (triggers) | No (server-side only) |
-| user_tenants/{uid} | Auth flow only | Cloud Function | No (custom claims) |
-| sequences/{tid} | Never (client) | Cloud Function only | No (server transaction) |
+| Collection | Read Pattern | Write Pattern | Offline Support | Notes |
+|------------|--------------|---------------|-----------------|-------|
+| tenants/{tid}/members | Startup, auth check | Admin only | No (requires online) | |
+| tenants/{tid}/jobs | List view, filters | CRUD by owner/rep | Yes (full offline) | |
+| tenants/{tid}/jobs/{jid}/costs | Job detail view | High frequency | Yes (full offline) | |
+| tenants/{tid}/vehicles | Resource selector | Low frequency | Yes (cached) | Count query for auto-selection (FR25) |
+| tenants/{tid}/machines | Resource selector | Low frequency | Yes (cached) | Count query for auto-selection (FR25) |
+| tenants/{tid}/teamMembers | Resource selector | Low frequency | Yes (cached) | Count query for auto-selection (FR25) |
+| tenants/{tid}/audit_logs | Admin export only | Auto (triggers) | No (server-side only) | |
+| user_tenants/{uid} | Auth flow only | Cloud Function | No (custom claims) | |
+| sequences/{tid} | Never (client) | Cloud Function only | No (server transaction) | |
+
+**Note on Single Resource Auto-Selection (FR25):** Client applications should perform simple count queries on resource collections. If `count === 1`, the UI automatically selects that resource and displays it as read-only text. This requires no backend changes - it's a client-side UX optimization.
 
 ---
 

@@ -572,6 +572,113 @@ export const selectFilteredJobs = createSelector(
 );
 ```
 
+## Resource Selectors with Single-Resource Detection
+
+For resources (vehicles, team members, machines), create selectors that detect single-resource scenarios:
+
+```typescript
+// resources.selectors.ts - Selectors for vehicles, machines, team members
+
+// Vehicle selectors
+export const selectAllVehicles = createSelector(
+  selectVehiclesState,
+  (state) => Object.values(state.entities)
+);
+
+export const selectVehicleCount = createSelector(
+  selectAllVehicles,
+  (vehicles) => vehicles.length
+);
+
+export const selectHasSingleVehicle = createSelector(
+  selectVehicleCount,
+  (count) => count === 1
+);
+
+export const selectSingleVehicle = createSelector(
+  selectAllVehicles,
+  selectHasSingleVehicle,
+  (vehicles, hasSingle) => hasSingle ? vehicles[0] : null
+);
+
+export const selectVehicleAutoSelection = createSelector(
+  selectAllVehicles,
+  selectHasSingleVehicle,
+  (vehicles, hasSingle) => ({
+    vehicles,
+    hasSingle,
+    autoSelectedVehicle: hasSingle ? vehicles[0] : null,
+    requiresSelection: vehicles.length > 1
+  })
+);
+
+// Team member selectors
+export const selectAllTeamMembers = createSelector(
+  selectTeamMembersState,
+  (state) => Object.values(state.entities)
+);
+
+export const selectTeamMemberCount = createSelector(
+  selectAllTeamMembers,
+  (members) => members.length
+);
+
+export const selectHasSingleTeamMember = createSelector(
+  selectTeamMemberCount,
+  (count) => count === 1
+);
+
+export const selectSingleTeamMember = createSelector(
+  selectAllTeamMembers,
+  selectHasSingleTeamMember,
+  (members, hasSingle) => hasSingle ? members[0] : null
+);
+
+export const selectTeamMemberAutoSelection = createSelector(
+  selectAllTeamMembers,
+  selectHasSingleTeamMember,
+  (members, hasSingle) => ({
+    teamMembers: members,
+    hasSingle,
+    autoSelectedMember: hasSingle ? members[0] : null,
+    requiresSelection: members.length > 1
+  })
+);
+
+// Machine selectors
+export const selectAllMachines = createSelector(
+  selectMachinesState,
+  (state) => Object.values(state.entities)
+);
+
+export const selectMachineCount = createSelector(
+  selectAllMachines,
+  (machines) => machines.length
+);
+
+export const selectHasSingleMachine = createSelector(
+  selectMachineCount,
+  (count) => count === 1
+);
+
+export const selectSingleMachine = createSelector(
+  selectAllMachines,
+  selectHasSingleMachine,
+  (machines, hasSingle) => hasSingle ? machines[0] : null
+);
+
+export const selectMachineAutoSelection = createSelector(
+  selectAllMachines,
+  selectHasSingleMachine,
+  (machines, hasSingle) => ({
+    machines,
+    hasSingle,
+    autoSelectedMachine: hasSingle ? machines[0] : null,
+    requiresSelection: machines.length > 1
+  })
+);
+```
+
 ## Store Configuration
 
 ```typescript
@@ -669,6 +776,115 @@ export class JobsListComponent {
 
   protected updateJob(id: string, changes: Partial<Job>): void {
     this.store.dispatch(JobsActions.updateJob({ id, changes }));
+  }
+}
+```
+
+### Using Resource Auto-Selection Selectors
+
+```typescript
+// Transport cost form with auto-selection
+import { Component, inject, signal } from '@angular/core';
+import { Store } from '@ngrx/store';
+import { selectVehicleAutoSelection } from './data-access/resources.selectors';
+
+@Component({
+  selector: 'app-transport-cost-form',
+  template: `
+    <!-- Single vehicle: show as read-only -->
+    @if (vehicleSelection().hasSingle) {
+      <div class="resource-info">
+        <ion-label>Vehicle</ion-label>
+        <p class="readonly-value">
+          [{{ vehicleSelection().autoSelectedVehicle?.vehicleNumber }}]
+          {{ vehicleSelection().autoSelectedVehicle?.name }}
+        </p>
+      </div>
+    }
+
+    <!-- Multiple vehicles: show dropdown -->
+    @else if (vehicleSelection().requiresSelection) {
+      <ion-item>
+        <ion-label>Vehicle</ion-label>
+        <ion-select [(ngModel)]="selectedVehicleId" interface="popover">
+          @for (vehicle of vehicleSelection().vehicles; track vehicle.id) {
+            <ion-select-option [value]="vehicle.id">
+              [{{ vehicle.vehicleNumber }}] {{ vehicle.name }}
+            </ion-select-option>
+          }
+        </ion-select>
+      </ion-item>
+    }
+
+    <!-- No vehicles -->
+    @else {
+      <ion-item color="warning">
+        <ion-label>No vehicles available. Add one in Settings.</ion-label>
+      </ion-item>
+    }
+  `
+})
+export class TransportCostFormComponent {
+  private readonly store = inject(Store);
+
+  protected readonly vehicleSelection = signal<{
+    vehicles: Vehicle[];
+    hasSingle: boolean;
+    autoSelectedVehicle: Vehicle | null;
+    requiresSelection: boolean;
+  }>({
+    vehicles: [],
+    hasSingle: false,
+    autoSelectedVehicle: null,
+    requiresSelection: false
+  });
+
+  protected readonly selectedVehicleId = signal<string | null>(null);
+
+  constructor() {
+    // Subscribe to auto-selection selector
+    this.store.select(selectVehicleAutoSelection).pipe(
+      takeUntilDestroyed()
+    ).subscribe(selection => {
+      this.vehicleSelection.set(selection);
+
+      // Auto-select if single vehicle
+      if (selection.hasSingle && selection.autoSelectedVehicle) {
+        this.selectedVehicleId.set(selection.autoSelectedVehicle.id);
+      }
+    });
+  }
+
+  protected getSelectedVehicle(): Vehicle | null {
+    const selection = this.vehicleSelection();
+
+    if (selection.hasSingle) {
+      return selection.autoSelectedVehicle;
+    }
+
+    return selection.vehicles.find(v => v.id === this.selectedVehicleId()) || null;
+  }
+
+  protected onSave(): void {
+    const vehicle = this.getSelectedVehicle();
+    if (!vehicle) {
+      this.showError('Please select a vehicle');
+      return;
+    }
+
+    // Create transport cost with selected vehicle
+    const cost = {
+      category: 'transport',
+      vehicle: {
+        vehicleNumber: vehicle.vehicleNumber,
+        name: vehicle.name,
+        distanceUnit: vehicle.distanceUnit,
+        ratePerDistanceUnit: vehicle.ratePerDistanceUnit
+      },
+      // ... other fields
+    };
+
+    this.store.dispatch(CostsActions.createCost({ cost }));
   }
 }
 ```
