@@ -74,15 +74,17 @@
 1. Resources Management screen has "Team Members" tab
 2. Team members list displays: `[teamMemberNumber] Name - Rate: X CZK/hour` with role badge (Owner | Representative | Team Member)
 3. Registering user auto-created as team member #1 (resource) and as an owner membership (from Story 1.3) — this is the business owner
-4. "Add Team Member" opens an "Invite Member" dialog
-5. Invite form fields: email (optional), role select: representative | teamMember; after the invite is redeemed, the owner can set name/hourlyRate on the team member resource
-6. On "Create Invite", a Cloud Function creates `/tenants/{tenantId}/invites/{inviteId}` and returns a single-use code/link (TTL; single-use)
-7. Upon invite redemption, membership is created at `/tenants/{tenantId}/members/{uid}` with selected role and `status: 'active'`; a team member resource is created at `/tenants/{tenantId}/teamMembers/{teamMemberId}` with `teamMemberNumber` and `authUserId: uid`, with initial createdBy from the inviting owner's identity
-8. Edit team member updates: name, hourlyRate, updatedAt, updatedBy: {uid, memberNumber, displayName} (role is managed on the membership and editable by owners only; team member #1 cannot change their owner status)
-9. Delete team member removes the resource document; membership removal is a separate owner-only action (not implied by resource deletion)
-10. **Owner protection:** Team member #1 cannot be deleted - delete button hidden/disabled with tooltip: "Business owner (Member #1) cannot be deleted"
-11. Non-owner team member deletion shows confirmation: "Delete [teamMemberNumber] Name? This cannot be undone."
-12. Empty state: "No team members yet" should never occur (owner is always present as #1)
+4. **"Add Team Member" button visible only to owner role**; representatives and team members do not see this button
+5. "Add Team Member" opens an "Invite Member" dialog (owner-only access)
+6. Invite form fields: email (optional), role select: representative | teamMember; after the invite is redeemed, the owner can set name/hourlyRate on the team member resource
+7. On "Create Invite", a Cloud Function creates `/tenants/{tenantId}/invites/{inviteId}` and returns a single-use code/link (TTL; single-use)
+8. Upon invite redemption, membership is created at `/tenants/{tenantId}/members/{uid}` with selected role and `status: 'active'`; a team member resource is created at `/tenants/{tenantId}/teamMembers/{teamMemberId}` with `teamMemberNumber` and `authUserId: uid`, with initial createdBy from the inviting owner's identity
+9. Edit team member updates: name, hourlyRate, updatedAt, updatedBy: {uid, memberNumber, displayName} (role is managed on the membership and editable by owners only; team member #1 cannot change their owner status)
+10. Delete team member removes the resource document; membership removal is a separate owner-only action (not implied by resource deletion)
+11. **Owner protection:** Team member #1 cannot be deleted - delete button hidden/disabled with tooltip: "Business owner (Member #1) cannot be deleted"
+12. Non-owner team member deletion shows confirmation: "Delete [teamMemberNumber] Name? This cannot be undone."
+13. Empty state: "No team members yet" should never occur (owner is always present as #1)
+14. **Privilege enforcement:** If user attempts to access invite creation directly (via URL or API), Security Rules block the request if role != 'owner'
 
 ### Story 2.5: Business Profile Configuration
 

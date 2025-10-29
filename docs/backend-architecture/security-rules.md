@@ -167,7 +167,7 @@ service cloud.firestore {
       // Invites collection
       match /invites/{inviteId} {
         allow read: if isActiveMember(tenantId);
-        allow create: if isOwnerOrRepresentative(tenantId)
+        allow create: if isOwner(tenantId)  // Only owner can invite team members
           && documentHasTenantId(tenantId)
           && auditMetadataValid()
           && canWriteToTenant(tenantId);
@@ -462,7 +462,7 @@ service firebase.storage {
 |------------|-------|----------------|-------------|
 | tenant (root) | Read/Update* | Read | Read |
 | members | Read/Update/Delete | Read | Read |
-| invites | Read/Create/Delete | Read/Create | Read |
+| invites | Read/Create/Delete | Read | Read |
 | businessProfile | Read/Write | Read | Read |
 | personProfile | Read/Write | Read/Write | Read/Write |
 | jobs | Read/Write | Read/Write | Read (jobs_public) |
@@ -483,6 +483,12 @@ service firebase.storage {
 - These fields can only be updated by Cloud Functions (server-side)
 - Client updates to the tenant document are allowed, but cannot modify these fields
 - This ensures schema version integrity and prevents clients from bypassing migration checks
+
+**Team Member Invitations:**
+- Only owners can create invitations (FR11)
+- Representatives and team members can view invitations but cannot create them
+- This ensures business owners retain full control over team composition
+- Representatives can manage resources but not team membership
 
 **Team Member Cost Creation:**
 - Team members can create costs (high frequency operation)

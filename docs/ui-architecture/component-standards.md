@@ -565,6 +565,124 @@ export class LaborCostFormComponent {
 }
 ```
 
+## Role-Based UI Visibility Pattern
+
+Implement privilege-based feature visibility based on user role (FR11):
+
+### Pattern Overview
+
+```typescript
+@Component({
+  selector: 'app-team-members',
+  template: `
+    <!-- Owner-only: Invite Team Member button -->
+    @if (userRole() === 'owner') {
+      <ion-button (click)="openInviteDialog()">
+        <ion-icon slot="start" name="person-add"></ion-icon>
+        Add Team Member
+      </ion-button>
+    }
+
+    <!-- All members can view team list -->
+    <ion-list>
+      @for (member of teamMembers(); track member.id) {
+        <ion-item>
+          <ion-label>
+            <h2>[{{ member.teamMemberNumber }}] {{ member.name }}</h2>
+            <p>{{ member.role | titleCase }}</p>
+          </ion-label>
+        </ion-item>
+      }
+    </ion-list>
+  `
+})
+export class TeamMembersComponent {
+  private readonly store = inject(Store);
+
+  protected readonly userRole = signal<string>('');
+  protected readonly teamMembers = signal<TeamMember[]>([]);
+
+  constructor() {
+    // Subscribe to user role from auth state
+    this.store.select(selectUserRole).pipe(
+      takeUntilDestroyed()
+    ).subscribe(role => this.userRole.set(role));
+
+    // Load team members
+    this.store.select(selectAllTeamMembers).pipe(
+      takeUntilDestroyed()
+    ).subscribe(members => this.teamMembers.set(members));
+  }
+
+  protected openInviteDialog(): void {
+    // Only callable if button is visible (owner-only)
+    this.modalCtrl.create({
+      component: InviteTeamMemberModal,
+      // ...
+    }).then(modal => modal.present());
+  }
+}
+```
+
+### Role Permission Guidelines
+
+Based on FR11, implement these UI visibility rules:
+
+| Feature | Owner | Representative | Team Member |
+|---------|-------|----------------|-------------|
+| Invite Team Members | ✅ Visible | ❌ Hidden | ❌ Hidden |
+| View Audit Logs | ✅ Visible | ❌ Hidden | ❌ Hidden |
+| Export Data | ✅ Visible | ❌ Hidden | ❌ Hidden |
+| Edit Business Profile | ✅ Enabled | ❌ Disabled | ❌ Hidden |
+| Create/Edit Jobs | ✅ Enabled | ❌ Read-only | ❌ Hidden |
+| Add/Edit Costs | ✅ Enabled | ✅ Enabled | ✅ Enabled* |
+| View Job Budget | ✅ Visible | ✅ Visible | ❌ Hidden |
+| Manage Advances | ✅ Enabled | ✅ Enabled | ❌ Hidden |
+
+*Active status required
+
+### Implementation Pattern
+
+```typescript
+export class SomeFeatureComponent {
+  protected readonly userRole = signal<string>('');
+  protected readonly isOwner = computed(() => this.userRole() === 'owner');
+  protected readonly isOwnerOrRep = computed(() =>
+    ['owner', 'representative'].includes(this.userRole())
+  );
+
+  constructor() {
+    this.store.select(selectUserRole).pipe(
+      takeUntilDestroyed()
+    ).subscribe(role => this.userRole.set(role));
+  }
+}
+```
+
+### Template Examples
+
+```typescript
+// Owner-only button
+@if (isOwner()) {
+  <ion-button (click)="inviteTeamMember()">Invite Team Member</ion-button>
+}
+
+// Owner or Representative
+@if (isOwnerOrRep()) {
+  <ion-button (click)="createJob()">Create Job</ion-button>
+}
+
+// Disabled for non-owners with tooltip
+<ion-button
+  [disabled]="!isOwner()"
+  (click)="editBusinessProfile()">
+  Edit Profile
+</ion-button>
+@if (!isOwner()) {
+  <p class="hint">Only the business owner can edit the profile</p>
+}
+```
+
 ## Component Checklist
 
 Before committing a component, ensure:
@@ -579,6 +697,7 @@ Before committing a component, ensure:
 - [ ] Loading and empty states
 - [ ] Accessible (ARIA labels, keyboard nav)
 - [ ] Touch-friendly (48px+ targets)
+- [ ] Role-based UI visibility implemented (if applicable)
 - [ ] Unit tests written
 - [ ] Documentation comments
 

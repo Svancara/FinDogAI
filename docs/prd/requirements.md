@@ -27,9 +27,9 @@
 **FR10:** The system shall implement Firebase Authentication (email/password minimum) with Firestore Security Rules enforcing membership-based multi-tenant isolation under `/tenants/{tenantId}/**`. Access is allowed only for authenticated users that have a membership document at `/tenants/{tenantId}/members/{request.auth.uid}`; documents MUST include `tenantId` that matches the path; per-operation access is enforced via `membership.role`.
 
 **FR11:** The system shall use role-based access control on membership documents (`/tenants/{tenantId}/members/{uid}`) with fields: `role ∈ {owner, representative, teamMember}` and `status ∈ {active, disabled}`. Role semantics:
-- Owner: full access to all functions and data, including audit logs and exports.
-- Owner's representative: Jobs are read-only; cannot change Business Profile; cannot change privileges; cannot view audit_logs; cannot export any data; all other functions and data are fully available (including costs and resources).
-- Team member: Jobs are read-only (only active jobs visible; only `jobNumber` and `title` shown); cannot change Business Profile, privileges, or resources; cannot export any data; no access to the advances collection; all other functions and data are available (including adding/editing costs).
+- Owner: full access to all functions and data, including audit logs, exports, and team member invitations.
+- Owner's representative: Jobs are read-only; cannot change Business Profile; cannot change privileges; cannot invite team members; cannot view audit_logs; cannot export any data; all other functions and data are fully available (including costs and resources).
+- Team member: Jobs are read-only (only active jobs visible; only `jobNumber` and `title` shown); cannot change Business Profile, privileges, or resources; cannot invite team members; cannot export any data; no access to the advances collection; all other functions and data are available (including adding/editing costs).
 
 **FR12:** The system shall require team member authentication and identification, storing the compound identity object {uid, memberNumber, displayName} with all operations for audit trail purposes. This enables both machine-readable (uid) and human-readable (memberNumber, displayName) audit attribution.
 
