@@ -179,6 +179,46 @@ type ResourceSnapshot = TransportSnapshot | LaborSnapshot | MachineSnapshot;
 - References snapshot of Resource at creation time
 - Created/updated by Member entities (via UID)
 
+## Business Profile Model
+
+**Purpose:** Tenant-wide configuration and defaults for jobs, currency, VAT, and resource type visibility
+
+**Key Attributes:**
+- `currency`: string - ISO 4217 currency code (e.g., 'CZK', 'EUR', 'USD')
+- `vatRate`: number - Default VAT percentage (0-100)
+- `distanceUnit`: 'km' | 'mi' - Preferred distance measurement unit
+- `usesMachines`: boolean - Whether business uses machines (controls UI visibility)
+- `usesVehicles`: boolean - Whether business uses vehicles (controls UI visibility)
+- `usesOtherExpenses`: boolean - Whether business tracks other expenses (controls UI visibility)
+
+**TypeScript Interface:**
+```typescript
+interface BusinessProfile {
+  tenantId: string;
+  currency: string;         // ISO 4217 code
+  vatRate: number;          // Percentage (0-100)
+  distanceUnit: 'km' | 'mi';
+  usesMachines: boolean;    // Default: true - Controls UI visibility for machine-related features
+  usesVehicles: boolean;    // Default: true - Controls UI visibility for vehicle-related features
+  usesOtherExpenses: boolean; // Default: true - Controls UI visibility for other expenses
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+```
+
+**Relationships:**
+- One-to-one with Tenant (created during tenant initialization)
+- Referenced by Job creation for default values
+- Referenced by Vehicle creation for distanceUnit default
+- Controls conditional UI rendering throughout the application
+
+**UI Visibility Control Logic:**
+- When `usesMachines: false`, hide machine-related UI elements (add machine button, machine costs, machine resource tabs)
+- When `usesVehicles: false`, hide vehicle-related UI elements (add vehicle button, vehicle/transport costs, vehicle resource tabs)
+- When `usesOtherExpenses: false`, hide other expense UI elements (add expense button, expense costs in lists)
+- Team member controls are ALWAYS visible (at least one team member must exist - the business owner)
+- Existing resources of hidden types remain in database but are not selectable in UI
+
 ## Resource Models
 
 **Purpose:** Reusable entities for vehicles, team members, and machines used across jobs

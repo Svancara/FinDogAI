@@ -24,6 +24,10 @@ This folder contains the complete technical architecture documentation for FinDo
 ### Standards & Guidelines
 - [Coding Standards](./coding-standards.md) - Critical rules, naming conventions, and best practices
 
+### Feature-Specific Guides
+- [Business Profile Migration](./business-profile-migration.md) - Migration guide for resource visibility feature
+- [Business Profile Implementation Checklist](./business-profile-implementation-checklist.md) - Developer implementation roadmap
+
 ## 🎯 Quick Navigation
 
 ### For AI Assistants

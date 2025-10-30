@@ -234,6 +234,75 @@ export const onCostWrite = onDocumentWritten(
 );
 ```
 
+## Business Profile API
+
+Direct Firestore access pattern for business configuration.
+
+### TypeScript Service Interface
+```typescript
+interface BusinessProfileService {
+  get(): Observable<BusinessProfile>;
+  update(updates: Partial<BusinessProfile>): Promise<void>;
+  shouldShowResourceType(type: 'machines' | 'vehicles' | 'otherExpenses'): Observable<boolean>;
+}
+```
+
+### Business Profile Document Structure
+```typescript
+interface BusinessProfile {
+  tenantId: string;
+  currency: string;              // ISO 4217 code (CZK, EUR, USD)
+  vatRate: number;               // Percentage 0-100
+  distanceUnit: 'km' | 'mi';
+  usesMachines: boolean;         // Default: true
+  usesVehicles: boolean;         // Default: true
+  usesOtherExpenses: boolean;    // Default: true
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+```
+
+### Validation Rules
+```typescript
+// Business Profile validation
+function validateBusinessProfile(profile: Partial<BusinessProfile>): ValidationResult {
+  const errors: string[] = [];
+
+  // Currency validation
+  if (profile.currency && !['CZK', 'EUR', 'USD'].includes(profile.currency)) {
+    errors.push('Currency must be one of: CZK, EUR, USD');
+  }
+
+  // VAT rate validation
+  if (profile.vatRate !== undefined) {
+    if (profile.vatRate < 0 || profile.vatRate > 100) {
+      errors.push('VAT rate must be between 0 and 100');
+    }
+  }
+
+  // Distance unit validation
+  if (profile.distanceUnit && !['km', 'mi'].includes(profile.distanceUnit)) {
+    errors.push('Distance unit must be either km or mi');
+  }
+
+  // Boolean flag validation
+  if (profile.usesMachines !== undefined && typeof profile.usesMachines !== 'boolean') {
+    errors.push('usesMachines must be a boolean');
+  }
+  if (profile.usesVehicles !== undefined && typeof profile.usesVehicles !== 'boolean') {
+    errors.push('usesVehicles must be a boolean');
+  }
+  if (profile.usesOtherExpenses !== undefined && typeof profile.usesOtherExpenses !== 'boolean') {
+    errors.push('usesOtherExpenses must be a boolean');
+  }
+
+  return {
+    valid: errors.length === 0,
+    errors
+  };
+}
+```
+
 ## Security Rules Integration
 
 All direct Firestore access is secured by Firebase Security Rules:
@@ -251,6 +320,22 @@ match /tenants/{tenantId}/jobs/{jobId} {
   allow update: if request.auth != null &&
     exists(/databases/$(database)/documents/tenants/$(tenantId)/members/$(request.auth.uid)) &&
     request.resource.data.tenantId == resource.data.tenantId;  // Prevent tenant ID changes
+}
+
+// Business Profile security rules
+match /tenants/{tenantId}/businessProfile/default {
+  // All tenant members can read business profile
+  allow read: if request.auth != null &&
+    exists(/databases/$(database)/documents/tenants/$(tenantId)/members/$(request.auth.uid));
+
+  // Only owners can update business profile
+  allow update: if request.auth != null &&
+    exists(/databases/$(database)/documents/tenants/$(tenantId)/members/$(request.auth.uid)) &&
+    get(/databases/$(database)/documents/tenants/$(tenantId)/members/$(request.auth.uid)).data.role == 'owner' &&
+    request.resource.data.tenantId == resource.data.tenantId &&  // Prevent tenant ID changes
+    request.resource.data.vatRate >= 0 && request.resource.data.vatRate <= 100 &&  // Validate VAT rate
+    request.resource.data.currency in ['CZK', 'EUR', 'USD'] &&  // Validate currency
+    request.resource.data.distanceUnit in ['km', 'mi'];  // Validate distance unit
 }
 ```
 

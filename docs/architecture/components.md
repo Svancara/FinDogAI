@@ -57,9 +57,33 @@ The FinDogAI system is organized into logical components that span both frontend
 - `toggleResourceAvailability(id: string): Promise<void>` - Active/inactive toggle
 - `getResourceUtilization(id: string, period: DateRange): Promise<UtilizationReport>`
 
-**Dependencies:** Firestore service, Offline Sync Manager
+**Dependencies:** Firestore service, Offline Sync Manager, Business Profile Service
 
 **Technology Stack:** Angular components with Ionic UI, reactive forms
+
+### Business Profile Service
+
+**Responsibility:** Provide business configuration and control conditional UI rendering based on resource type usage
+
+**Key Interfaces:**
+- `getBusinessProfile(): Observable<BusinessProfile>` - Stream business profile changes
+- `updateBusinessProfile(updates: Partial<BusinessProfile>): Promise<void>` - Update configuration
+- `shouldShowResourceType(type: 'machines' | 'vehicles' | 'otherExpenses'): Observable<boolean>` - UI visibility control
+- `getDefaultJobSettings(): Observable<JobDefaults>` - Get defaults for new jobs
+
+**Dependencies:** Firestore service, Offline Sync Manager
+
+**Technology Stack:** Angular service with RxJS, Firestore SDK
+
+**Conditional UI Rendering Logic:**
+- Service maintains reactive stream of `BusinessProfile.usesMachines`, `usesVehicles`, `usesOtherExpenses`
+- UI components subscribe to visibility observables using async pipe
+- When flag is `false`, corresponding UI elements are hidden:
+  - **Machines (usesMachines: false):** Hide "Add Machine" button, machine resource tab, machine cost entry, machine cost type filter
+  - **Vehicles (usesVehicles: false):** Hide "Add Vehicle" button, vehicle resource tab, transport/journey cost entry, vehicle cost type filter
+  - **Other Expenses (usesOtherExpenses: false):** Hide "Add Expense" button, expense cost entry, expense cost type filter
+- Team member UI is NEVER hidden (business owner always exists)
+- Auto-selection logic still applies when exactly one resource exists, regardless of visibility settings
 
 ## Backend Components
 

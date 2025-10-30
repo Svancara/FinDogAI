@@ -89,21 +89,47 @@
 ### Story 2.5: Business Profile Configuration
 
 **As a** business owner,
-**I want** to configure business-wide defaults (currency, VAT rate, distance unit),
-**so that** new jobs inherit these settings and I don't repeat data entry.
+**I want** to configure business-wide defaults (currency, VAT rate, distance unit) and control which resource types my business uses,
+**so that** new jobs inherit these settings, I don't repeat data entry, and the UI only shows relevant features for my business type.
 
 **Acceptance Criteria:**
 
 1. Settings screen has "Business Profile" section
-2. Fields displayed: Currency (dropdown: CZK, EUR, USD with ISO 4217 codes), VAT Rate (percentage, default 21%), Distance Unit (radio: Kilometers / Miles)
-3. On first access, fields pre-filled from `/tenants/{tenantId}/businessProfile` (created in Story 1.3)
-4. Save button updates businessProfile document with: currency, vatRate, distanceUnit, updatedAt
+2. Fields displayed:
+   - Currency (dropdown: CZK, EUR, USD with ISO 4217 codes)
+   - VAT Rate (percentage, default 21%)
+   - Distance Unit (radio: Kilometers / Miles)
+   - **"My business involves:" section with three toggle switches:**
+     - **"Working with machines"** (default: ON) - Controls visibility of machine-related UI
+     - **"Using vehicles"** (default: ON) - Controls visibility of vehicle/transport-related UI
+     - **"Other business expenses"** (default: ON) - Controls visibility of other expense UI
+3. On first access, fields pre-filled from `/tenants/{tenantId}/businessProfile` (created in Story 1.3 with all resource type flags defaulting to `true`)
+4. Save button updates businessProfile document with: currency, vatRate, distanceUnit, usesMachines, usesVehicles, usesOtherExpenses, updatedAt
 5. Success message: "Business profile updated"
-6. New jobs created after update use new defaults
+6. New jobs created after update use new defaults (currency, vatRate, distanceUnit)
 7. Existing jobs retain their original settings (not retroactively changed)
 8. Validation: VAT rate must be 0-100%, currency must be valid ISO code
 9. Offline mode: Changes saved locally, sync when online
 10. Settings persist across app restarts
+11. **When "Working with machines" is OFF:**
+    - Hide "Add Machine" button in Resources screen
+    - Hide "Machines" tab in Resources Management
+    - Hide machine cost entry options in cost creation/voice flows
+    - Hide machine-related cost filters and categories in cost lists
+    - Existing machine resources remain in database but are not displayed or selectable
+12. **When "Using vehicles" is OFF:**
+    - Hide "Add Vehicle" button in Resources screen
+    - Hide "Vehicles" tab in Resources Management
+    - Hide transport/journey cost entry options in cost creation/voice flows
+    - Hide vehicle-related cost filters and categories in cost lists
+    - Existing vehicle resources remain in database but are not displayed or selectable
+13. **When "Other business expenses" is OFF:**
+    - Hide "Add Expense" button in cost entry screens
+    - Hide expense cost type in cost creation forms and voice flows
+    - Hide expense-related cost filters in cost lists
+14. **Team member UI is ALWAYS visible** (cannot be disabled, as business owner always exists as team member #1)
+15. Toggling resource type flags immediately affects UI visibility throughout the application (reactive update)
+16. Help text displayed: "Hide resource types your business doesn't use to simplify the interface. This won't delete existing data."
 
 ### Story 2.6: Person Profile & Language Selection
 

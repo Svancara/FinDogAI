@@ -16,6 +16,7 @@ These MINIMAL but CRITICAL standards prevent common mistakes in AI-driven develo
 - **Soft Deletes:** DELETE operations must set `deletedAt` timestamp, never remove documents
 - **Voice Commands:** Always provide visual feedback for voice interactions (loading, success, error states)
 - **Audit Trail:** Never bypass audit metadata (createdBy, updatedBy) when modifying data
+- **Template Syntax:** Use `@if`, `@for`, `@switch` control flow (Angular 17+) instead of `*ngIf`, `*ngFor`, `*ngSwitch`
 
 ## Naming Conventions
 
@@ -181,19 +182,135 @@ export class JobsService {
 
 ### Template Standards
 ```html
-<!-- ✅ GOOD: Use async pipe for observables -->
-<div *ngIf="job$ | async as job">
+<!-- ✅ GOOD: Use @if control flow (Angular 17+) -->
+@if (job$ | async; as job) {
   <h1>{{ job.title }}</h1>
-</div>
+}
 
-<!-- ✅ GOOD: TrackBy for lists -->
-<ion-item *ngFor="let cost of costs; trackBy: trackByCostId">
-  {{ cost.description }}
-</ion-item>
+<!-- ✅ GOOD: Use @for with track (Angular 17+) -->
+@for (cost of costs; track cost.id) {
+  <ion-item>{{ cost.description }}</ion-item>
+}
+
+<!-- ⚠️ LEGACY: *ngIf and *ngFor (use @if/@for instead) -->
+<!-- <div *ngIf="job$ | async as job">...</div> -->
 
 <!-- ❌ BAD: Subscribe in component -->
 <!-- Don't subscribe manually unless necessary -->
 ```
+
+### Conditional UI Rendering Based on Business Profile
+
+**Pattern:** Use Business Profile flags to control UI visibility for resource types
+
+```typescript
+// ✅ GOOD: Service-based visibility control with @if control flow
+@Component({
+  selector: 'app-resources',
+  template: `
+    <ion-tabs>
+      <ion-tab-button tab="team-members">
+        <ion-label>Team Members</ion-label>
+      </ion-tab-button>
+
+      <!-- Conditionally show vehicle tab -->
+      @if (showVehicles$ | async) {
+        <ion-tab-button tab="vehicles">
+          <ion-label>Vehicles</ion-label>
+        </ion-tab-button>
+      }
+
+      <!-- Conditionally show machine tab -->
+      @if (showMachines$ | async) {
+        <ion-tab-button tab="machines">
+          <ion-label>Machines</ion-label>
+        </ion-tab-button>
+      }
+    </ion-tabs>
+  `
+})
+export class ResourcesComponent {
+  private businessProfileService = inject(BusinessProfileService);
+
+  // Reactive visibility streams
+  showVehicles$ = this.businessProfileService.shouldShowResourceType('vehicles');
+  showMachines$ = this.businessProfileService.shouldShowResourceType('machines');
+  showOtherExpenses$ = this.businessProfileService.shouldShowResourceType('otherExpenses');
+}
+```
+
+```typescript
+// ✅ GOOD: BusinessProfileService implementation
+@Injectable({
+  providedIn: 'root'
+})
+export class BusinessProfileService {
+  private db = inject(Firestore);
+  private tenantService = inject(TenantService);
+
+  private businessProfile$: Observable<BusinessProfile> = this.getBusinessProfile();
+
+  shouldShowResourceType(type: 'machines' | 'vehicles' | 'otherExpenses'): Observable<boolean> {
+    return this.businessProfile$.pipe(
+      map(profile => {
+        switch(type) {
+          case 'machines': return profile.usesMachines;
+          case 'vehicles': return profile.usesVehicles;
+          case 'otherExpenses': return profile.usesOtherExpenses;
+          default: return false;
+        }
+      }),
+      distinctUntilChanged()
+    );
+  }
+
+  private getBusinessProfile(): Observable<BusinessProfile> {
+    const tenantId = this.tenantService.currentTenantId;
+    const docRef = doc(this.db, `tenants/${tenantId}/businessProfile/default`);
+    return docData(docRef).pipe(
+      shareReplay(1) // Cache and share among subscribers
+    );
+  }
+}
+```
+
+```typescript
+// ✅ GOOD: Filter cost types based on business profile
+@Component({
+  selector: 'app-cost-form',
+  template: `
+    <ion-select [(ngModel)]="costCategory">
+      <ion-select-option value="material">Material</ion-select-option>
+      <ion-select-option value="labor">Labor</ion-select-option>
+      @if (showVehicles$ | async) {
+        <ion-select-option value="transport">Transport</ion-select-option>
+      }
+      @if (showMachines$ | async) {
+        <ion-select-option value="machine">Machine</ion-select-option>
+      }
+      @if (showOtherExpenses$ | async) {
+        <ion-select-option value="expense">Other Expense</ion-select-option>
+      }
+    </ion-select>
+  `
+})
+export class CostFormComponent {
+  private businessProfileService = inject(BusinessProfileService);
+
+  showVehicles$ = this.businessProfileService.shouldShowResourceType('vehicles');
+  showMachines$ = this.businessProfileService.shouldShowResourceType('machines');
+  showOtherExpenses$ = this.businessProfileService.shouldShowResourceType('otherExpenses');
+}
+```
+
+**Key Rules:**
+1. **Team Members UI is NEVER hidden** - Business owner always exists as team member #1
+2. **Use async pipe** - Avoid manual subscriptions for visibility flags
+3. **Use @if control flow** - Prefer `@if` over `*ngIf` for all conditional rendering (Angular 17+)
+4. **Reactive updates** - UI changes immediately when Business Profile is updated
+5. **Existing data preserved** - Hidden resources remain in database, just not visible/selectable in UI
+6. **Auto-selection still works** - When exactly one resource exists, auto-select regardless of visibility flags
+7. **Apply consistently** - Hide buttons, tabs, filters, and options for disabled resource types across all screens
 
 ## Cloud Functions Standards
 
