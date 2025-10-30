@@ -20,6 +20,7 @@ These core data models are shared between frontend and backend through the `/pac
 interface Tenant {
   tenantId: string;
   schemaVersion: number;
+  stripeCustomerId?: string;  // Stripe customer ID for billing
   migrations: {
     [version: string]: {
       appliedAt: Timestamp;
@@ -32,9 +33,11 @@ interface Tenant {
 ```
 
 **Relationships:**
-- Parent to all tenant-scoped collections (members, jobs, resources)
+- Parent to all tenant-scoped collections (members, jobs, resources, subscription, payments)
+- One-to-one with TenantSubscription
 - One-to-many with Member entities
 - One-to-many with Job entities
+- One-to-many with PaymentRecord entities
 
 ## Member Model
 
@@ -270,6 +273,148 @@ interface Machine {
 - Belong to one Tenant
 - Snapshot copied to Cost entities when referenced
 - Many-to-many with Jobs through Cost entities
+
+## Subscription Models
+
+### Tenant Subscription Model
+
+**Purpose:** Track subscription plan, billing status, usage limits, and current usage for each tenant
+
+**Location:** `/tenants/{tenantId}/subscription/default` (single document per tenant)
+
+**Key Attributes:**
+- `stripeCustomerId`: string - Stripe customer identifier
+- `stripeSubscriptionId`: string | null - Stripe subscription ID (null for free plan)
+- `plan`: SubscriptionPlan - Current subscription tier
+- `status`: SubscriptionStatus - Subscription state
+- `limits`: Object - Plan-specific usage limits
+- `usage`: Object - Current period usage tracking
+
+**TypeScript Interface:**
+```typescript
+type SubscriptionPlan = 'free' | 'trial' | 'pro' | 'enterprise';
+
+type SubscriptionStatus =
+  | 'active'          // Paid subscription, full access
+  | 'trialing'        // In trial period, full access
+  | 'past_due'        // Payment failed, grace period (3 days)
+  | 'canceled'        // User canceled, access until period end
+  | 'incomplete'      // Initial payment pending
+  | 'incomplete_expired'  // Trial expired without payment
+  | 'unpaid';         // Payment failed, no access
+
+interface TenantSubscription {
+  tenantId: string;
+
+  // Stripe Integration
+  stripeCustomerId: string;
+  stripeSubscriptionId: string | null;
+  stripePriceId: string | null;
+
+  // Plan & Status
+  plan: SubscriptionPlan;
+  status: SubscriptionStatus;
+
+  // Trial Management
+  trialStart: Timestamp | null;
+  trialEnd: Timestamp | null;
+
+  // Billing Period
+  currentPeriodStart: Timestamp;
+  currentPeriodEnd: Timestamp;
+
+  // Plan Limits (copied from plan definition for performance)
+  limits: {
+    maxJobs: number;                   // -1 = unlimited
+    maxTeamMembers: number;            // -1 = unlimited
+    maxVoiceMinutesPerMonth: number;   // -1 = unlimited
+    pdfExport: boolean;
+  };
+
+  // Current Usage (reset monthly)
+  usage: {
+    jobsCreated: number;
+    activeTeamMembers: number;
+    voiceMinutesThisMonth: number;
+    lastVoiceUsageReset: Timestamp;
+  };
+
+  // Lifecycle Flags
+  cancelAtPeriodEnd: boolean;
+  canceledAt: Timestamp | null;
+
+  // Metadata
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+```
+
+**Relationships:**
+- Belongs to one Tenant (one-to-one)
+- Referenced by all operations requiring usage limit checks
+- Updated by Stripe webhooks and usage tracking triggers
+
+### Payment Record Model
+
+**Purpose:** Historical record of all subscription payments and invoices
+
+**Location:** `/tenants/{tenantId}/payments/{paymentId}`
+
+**Key Attributes:**
+- `stripeInvoiceId`: string - Stripe invoice identifier
+- `amount`: number - Payment amount in cents
+- `status`: PaymentStatus - Payment state
+- `invoicePdfUrl`: string - Stripe-hosted invoice PDF URL
+
+**TypeScript Interface:**
+```typescript
+type PaymentStatus = 'paid' | 'open' | 'void' | 'uncollectible';
+
+interface PaymentRecord {
+  tenantId: string;
+  paymentId: string;  // Auto-generated Firestore ID
+
+  // Stripe References
+  stripeInvoiceId: string;
+  stripePaymentIntentId: string;
+  stripeChargeId: string | null;
+
+  // Payment Details
+  amount: number;     // Amount in cents (2900 = €29.00)
+  currency: string;   // 'eur'
+  status: PaymentStatus;
+
+  // Invoice
+  invoicePdfUrl: string | null;
+  invoiceNumber: string | null;
+
+  // Period Covered
+  periodStart: Timestamp;
+  periodEnd: Timestamp;
+
+  // Failure Information
+  failureReason: string | null;
+  failureMessage: string | null;
+
+  // Metadata
+  createdAt: Timestamp;
+  paidAt: Timestamp | null;
+}
+```
+
+**Relationships:**
+- Belongs to one Tenant
+- Created by Stripe webhook handlers
+- Referenced for billing history and invoice access
+
+**Usage Tracking:**
+- Job creation increments `usage.jobsCreated`
+- Member changes update `usage.activeTeamMembers`
+- Voice commands increment `usage.voiceMinutesThisMonth`
+- Usage resets monthly on subscription renewal
+
+**Subscription Plans:**
+See [Subscription Billing Architecture](./subscription-billing.md) for detailed plan definitions and limits.
 
 ## Data Management Patterns
 

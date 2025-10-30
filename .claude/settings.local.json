@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "Bash(md-tree explode:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "WebFetch(domain:www.revenuecat.com)",
+      "WebSearch"
     ],
     "deny": [],
     "ask": []

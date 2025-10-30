@@ -16,6 +16,7 @@ FinDogAI leverages four core Firebase services, all configured in the europe-wes
 ## Firebase Authentication
 
 ### Purpose
+
 User identity management and tenant context injection.
 
 ### Configuration
@@ -28,12 +29,14 @@ User identity management and tenant context injection.
 ### Features Used
 
 #### Email/Password Authentication
+
 - Standard Firebase email/password authentication
 - Password requirements enforced by Firebase (minimum 6 characters)
 - Email verification available but not required for MVP
 - Password reset via email
 
 #### Custom Claims for Multi-Tenancy
+
 Custom claim `tenant_id` is added to user tokens after tenant membership resolution:
 
 ```typescript
@@ -55,6 +58,7 @@ See [High Level Architecture - User Authentication Flow](./high-level-architectu
 ## Cloud Firestore
 
 ### Purpose
+
 Primary database for all tenant data with offline-first capabilities.
 
 ### Configuration
@@ -122,6 +126,7 @@ See [Data Model](./data-model.md) for complete schema definitions.
 ## Cloud Functions (2nd Gen)
 
 ### Purpose
+
 Server-side business logic for operations that cannot run client-side.
 
 ### Configuration
@@ -172,6 +177,7 @@ See [Cloud Functions](./cloud-functions.md) for implementation details.
 ## Cloud Storage for Firebase
 
 ### Purpose
+
 Secure file storage for data exports and generated reports.
 
 ### Configuration

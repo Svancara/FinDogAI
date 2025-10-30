@@ -82,6 +82,7 @@ interface AllocateSequenceResponse {
 ```
 
 **Example Call:**
+
 ```typescript
 const allocateSequence = httpsCallable<AllocateSequenceRequest, AllocateSequenceResponse>(
   functions,
@@ -178,6 +179,165 @@ interface InviteTeamMemberResponse {
 }
 ```
 
+## Subscription & Billing Functions
+
+### Function: `createCheckoutSession`
+
+**Purpose:** Create Stripe Checkout session for subscription upgrade
+
+**Request:**
+```typescript
+interface CreateCheckoutSessionRequest {
+  tenantId: string;
+  priceId: string;         // Stripe Price ID (e.g., 'price_xxxxxxxxxxxxx')
+  successUrl?: string;     // Optional redirect after success
+  cancelUrl?: string;      // Optional redirect after cancellation
+}
+```
+
+**Response:**
+```typescript
+interface CreateCheckoutSessionResponse {
+  checkoutUrl: string;     // Stripe Checkout URL to redirect user
+  sessionId: string;       // Session ID for tracking
+}
+```
+
+**Example Call:**
+```typescript
+const createCheckout = httpsCallable<CreateCheckoutSessionRequest, CreateCheckoutSessionResponse>(
+  functions,
+  'createCheckoutSession'
+);
+
+const result = await createCheckout({
+  tenantId: 'tenant123',
+  priceId: 'price_1AbC2dEfGhIjKlMn',
+  successUrl: 'https://findogai.app/billing/success',
+  cancelUrl: 'https://findogai.app/billing'
+});
+
+// Redirect user to Stripe Checkout
+window.location.href = result.data.checkoutUrl;
+```
+
+### Function: `checkSubscriptionStatus`
+
+**Purpose:** Check if user can perform action based on subscription limits
+
+**Request:**
+```typescript
+interface CheckSubscriptionStatusRequest {
+  tenantId: string;
+  action: 'create_job' | 'add_team_member' | 'use_voice' | 'export_pdf';
+}
+```
+
+**Response:**
+```typescript
+interface CheckSubscriptionStatusResponse {
+  allowed: boolean;
+  reason?: string;         // Why action is not allowed
+  message?: string;        // User-friendly message
+  redirectTo?: string;     // URL to redirect (e.g., /billing/upgrade)
+  currentUsage?: any;      // Current usage stats
+  limits?: any;            // Subscription limits
+}
+```
+
+**Example Call:**
+```typescript
+const checkStatus = httpsCallable<CheckSubscriptionStatusRequest, CheckSubscriptionStatusResponse>(
+  functions,
+  'checkSubscriptionStatus'
+);
+
+const result = await checkStatus({
+  tenantId: 'tenant123',
+  action: 'create_job'
+});
+
+if (!result.data.allowed) {
+  // Show upgrade modal or redirect
+  showUpgradeModal(result.data.message);
+}
+```
+
+### Function: `createPortalSession`
+
+**Purpose:** Create Stripe Customer Portal session for managing billing
+
+**Request:**
+```typescript
+interface CreatePortalSessionRequest {
+  tenantId: string;
+  returnUrl?: string;      // Optional return URL after portal
+}
+```
+
+**Response:**
+```typescript
+interface CreatePortalSessionResponse {
+  portalUrl: string;       // Stripe Customer Portal URL
+}
+```
+
+**Example Call:**
+```typescript
+const createPortal = httpsCallable<CreatePortalSessionRequest, CreatePortalSessionResponse>(
+  functions,
+  'createPortalSession'
+);
+
+const result = await createPortal({
+  tenantId: 'tenant123',
+  returnUrl: 'https://findogai.app/billing'
+});
+
+// Redirect user to Stripe Customer Portal
+window.location.href = result.data.portalUrl;
+```
+
+### Function: `trackVoiceUsage`
+
+**Purpose:** Track voice command usage against monthly limits
+
+**Request:**
+```typescript
+interface TrackVoiceUsageRequest {
+  tenantId: string;
+  durationSeconds: number;  // Voice command duration
+}
+```
+
+**Response:**
+```typescript
+interface TrackVoiceUsageResponse {
+  allowed: boolean;
+  remainingMinutes: number;
+  message?: string;         // If limit exceeded
+}
+```
+
+### Function: `handleStripeWebhook`
+
+**Purpose:** Process Stripe webhook events (called by Stripe, not frontend)
+
+**Type:** HTTP Request (not callable)
+
+**Events Handled:**
+- `customer.subscription.created`
+- `customer.subscription.updated`
+- `customer.subscription.deleted`
+- `customer.subscription.trial_will_end`
+- `invoice.paid`
+- `invoice.payment_failed`
+- `invoice.payment_action_required`
+
+**Security:**
+- Verifies webhook signature using Stripe webhook secret
+- Rejects requests without valid signature
+
 ## Firestore Triggers (Automatic Backend Processing)
 
 These Cloud Functions run automatically in response to Firestore changes:
@@ -230,6 +390,116 @@ export const onCostWrite = onDocumentWritten(
       userId: after?.updatedBy?.uid || before?.updatedBy?.uid,
       changes: action === 'updated' ? getDiff(before, after) : null
     });
+  }
+);
+```
+
+### Trigger: `onJobCreated` (Usage Tracking)
+
+```typescript
+// Track job creation for subscription usage limits
+export const onJobCreatedTrackUsage = onDocumentCreated(
+  'tenants/{tenantId}/jobs/{jobId}',
+  async (event) => {
+    const tenantId = event.params.tenantId;
+
+    // Increment job count in subscription usage
+    await admin.firestore()
+      .doc(`tenants/${tenantId}/subscription/default`)
+      .update({
+        'usage.jobsCreated': admin.firestore.FieldValue.increment(1),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+  }
+);
+```
+
+### Trigger: `onMemberWritten` (Usage Tracking)
+
+```typescript
+// Track active team member count for subscription limits
+export const onMemberWritten = onDocumentWritten(
+  'tenants/{tenantId}/members/{memberId}',
+  async (event) => {
+    const tenantId = event.params.tenantId;
+
+    // Count active members
+    const activeMembers = await admin.firestore()
+      .collection(`tenants/${tenantId}/members`)
+      .where('status', '==', 'active')
+      .where('deletedAt', '==', null)
+      .count()
+      .get();
+
+    // Update active member count
+    await admin.firestore()
+      .doc(`tenants/${tenantId}/subscription/default`)
+      .update({
+        'usage.activeTeamMembers': activeMembers.data().count,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+  }
+);
+```
+
+### Scheduled: `processTrialExpirations`
+
+```typescript
+// Daily check for expired trials
+export const processTrialExpirations = onSchedule(
+  'every day 02:00',
+  async () => {
+    const now = admin.firestore.Timestamp.now();
+
+    // Find expired trials
+    const expiredTrials = await admin.firestore()
+      .collectionGroup('subscription')
+      .where('status', '==', 'trialing')
+      .where('trialEnd', '<=', now)
+      .get();
+
+    for (const doc of expiredTrials.docs) {
+      const sub = doc.data();
+
+      // Update status to incomplete_expired
+      await doc.ref.update({
+        status: 'incomplete_expired',
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+
+      // Send expiration email
+      await sendTrialExpiredEmail(sub.tenantId);
+
+      logger.info(`Trial expired for tenant ${sub.tenantId}`);
+    }
+  }
+);
+```
+
+### Scheduled: `resetMonthlyUsage`
+
+```typescript
+// Reset voice usage on 1st of each month
+export const resetMonthlyUsage = onSchedule(
+  '0 0 1 * *', // Midnight on 1st day of month
+  async () => {
+    const subscriptions = await admin.firestore()
+      .collectionGroup('subscription')
+      .where('status', 'in', ['active', 'trialing'])
+      .get();
+
+    const batch = admin.firestore().batch();
+
+    for (const doc of subscriptions.docs) {
+      batch.update(doc.ref, {
+        'usage.voiceMinutesThisMonth': 0,
+        'usage.lastVoiceUsageReset': admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+    }
+
+    await batch.commit();
+    logger.info(`Reset monthly usage for ${subscriptions.size} subscriptions`);
   }
 );
 ```

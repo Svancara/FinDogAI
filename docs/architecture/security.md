@@ -24,7 +24,7 @@ This document consolidates all security-related aspects of the FinDogAI system, 
 ### Security Rules for Tenant Isolation
 
 ```javascript
-// Firestore Security Rules - Tenant Isolation
+// Firestore Security Rules - Tenant Isolation with Subscription Checks
 match /tenants/{tenantId}/{document=**} {
   // Helper function to check tenant membership
   function isTenantMember() {
@@ -37,21 +37,106 @@ match /tenants/{tenantId}/{document=**} {
     return get(/databases/$(database)/documents/tenants/$(tenantId)/members/$(request.auth.uid)).data.role;
   }
 
-  // All reads require tenant membership
-  allow read: if isTenantMember();
+  // Helper function to check active subscription
+  function hasActiveSubscription() {
+    let sub = get(/databases/$(database)/documents/tenants/$(tenantId)/subscription/default);
+    return sub != null && sub.data.status in ['active', 'trialing'];
+  }
 
-  // Creates require owner or representative role
+  // Helper function to check if within job limit
+  function withinJobLimit() {
+    let sub = get(/databases/$(database)/documents/tenants/$(tenantId)/subscription/default);
+    let maxJobs = sub.data.limits.maxJobs;
+    // -1 means unlimited
+    if (maxJobs == -1) {
+      return true;
+    }
+    let usage = sub.data.usage.jobsCreated;
+    return usage < maxJobs;
+  }
+
+  // Helper function to check if within team member limit
+  function withinTeamMemberLimit() {
+    let sub = get(/databases/$(database)/documents/tenants/$(tenantId)/subscription/default);
+    let maxMembers = sub.data.limits.maxTeamMembers;
+    // -1 means unlimited
+    if (maxMembers == -1) {
+      return true;
+    }
+    let usage = sub.data.usage.activeTeamMembers;
+    return usage < maxMembers;
+  }
+
+  // All reads require tenant membership and active subscription
+  allow read: if isTenantMember() && hasActiveSubscription();
+
+  // Creates require owner or representative role and active subscription
   allow create: if isTenantMember() &&
+    hasActiveSubscription() &&
     getUserRole() in ['owner', 'representative'];
 
   // Updates require membership and cannot change tenantId
   allow update: if isTenantMember() &&
+    hasActiveSubscription() &&
     request.resource.data.tenantId == resource.data.tenantId;
 
   // Soft deletes (setting deletedAt) allowed for owners/representatives
   allow update: if isTenantMember() &&
+    hasActiveSubscription() &&
     getUserRole() in ['owner', 'representative'] &&
     request.resource.data.keys().hasAll(['deletedAt']);
+}
+```
+
+### Subscription-Specific Security Rules
+
+```javascript
+// Jobs collection with usage limits
+match /tenants/{tenantId}/jobs/{jobId} {
+  allow read: if isTenantMember() && hasActiveSubscription();
+
+  allow create: if isTenantMember() &&
+    hasActiveSubscription() &&
+    withinJobLimit() &&
+    getUserRole() in ['owner', 'representative'];
+
+  allow update, delete: if isTenantMember() &&
+    hasActiveSubscription() &&
+    getUserRole() in ['owner', 'representative'];
+}
+
+// Members collection with team member limits
+match /tenants/{tenantId}/members/{memberId} {
+  allow read: if isTenantMember() && hasActiveSubscription();
+
+  allow create: if isTenantMember() &&
+    hasActiveSubscription() &&
+    withinTeamMemberLimit() &&
+    getUserRole() == 'owner';
+
+  allow update: if isTenantMember() &&
+    hasActiveSubscription() &&
+    getUserRole() == 'owner';
+
+  allow delete: if isTenantMember() &&
+    hasActiveSubscription() &&
+    getUserRole() == 'owner' &&
+    memberId != request.auth.uid; // Cannot delete self
+}
+
+// Subscription collection (read-only for users, write-only for Cloud Functions)
+match /tenants/{tenantId}/subscription/default {
+  // All tenant members can read subscription status
+  allow read: if isTenantMember();
+
+  // Only Cloud Functions can write (service account)
+  allow write: if false;
+}
+
+// Payments collection (read-only for owners)
+match /tenants/{tenantId}/payments/{paymentId} {
+  allow read: if isTenantMember() && getUserRole() == 'owner';
+  allow write: if false; // Only Cloud Functions can write
 }
 ```
 

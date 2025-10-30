@@ -5,12 +5,14 @@
 ## Deployment Strategy
 
 ### Frontend Deployment
+
 - **Platform:** Firebase Hosting
 - **Build Command:** `nx build mobile-app --prod`
 - **Output Directory:** `dist/apps/mobile-app`
 - **CDN/Edge:** Global Firebase CDN with automatic SSL
 
 ### Backend Deployment
+
 - **Platform:** Cloud Functions (2nd Gen)
 - **Build Command:** `nx build functions --prod`
 - **Deployment Method:** Firebase CLI with automatic function discovery
@@ -79,6 +81,7 @@ jobs:
 ## Environment Configuration
 
 ### Development Environment
+
 ```bash
 # .env.development
 FIREBASE_PROJECT_ID=findogai-dev
@@ -88,6 +91,7 @@ LOG_LEVEL=debug
 ```
 
 ### Staging Environment
+
 ```bash
 # .env.staging
 FIREBASE_PROJECT_ID=findogai-staging
@@ -97,6 +101,7 @@ LOG_LEVEL=info
 ```
 
 ### Production Environment
+
 ```bash
 # .env.production
 FIREBASE_PROJECT_ID=findogai-prod
@@ -109,6 +114,7 @@ SENTRY_ENABLED=true
 ## Deployment Commands
 
 ### Manual Deployment
+
 ```bash
 # Deploy everything
 firebase deploy
@@ -127,6 +133,7 @@ firebase deploy --project=findogai-prod
 ```
 
 ### Selective Function Deployment
+
 ```bash
 # Deploy single function
 firebase deploy --only functions:allocateSequence
@@ -138,6 +145,7 @@ firebase deploy --only functions:triggers,functions:callables
 ## Firebase Hosting Configuration
 
 ### firebase.json
+
 ```json
 {
   "hosting": {
@@ -176,6 +184,7 @@ firebase deploy --only functions:triggers,functions:callables
 ## Cloud Functions Configuration
 
 ### Function Runtime Settings
+
 ```typescript
 // apps/functions/src/index.ts
 export const allocateSequence = onCall({
@@ -191,6 +200,7 @@ export const allocateSequence = onCall({
 ```
 
 ### Function Environment Variables
+
 ```bash
 # Set function config
 firebase functions:config:set openai.key="YOUR_KEY"
@@ -203,6 +213,7 @@ firebase functions:config:get
 ## Rollback Strategy
 
 ### Hosting Rollback
+
 ```bash
 # List previous releases
 firebase hosting:channel:list
@@ -215,6 +226,7 @@ firebase hosting:rollback
 ```
 
 ### Functions Rollback
+
 ```bash
 # Functions don't support automatic rollback
 # Manual process:
@@ -227,11 +239,13 @@ firebase deploy --only functions
 ## Monitoring and Alerting
 
 ### Firebase Performance Monitoring
+
 - Automatically tracks web performance metrics
 - Custom traces for critical operations
 - Real-time performance data in Firebase Console
 
 ### Error Tracking (Sentry)
+
 ```typescript
 // Initialize Sentry in production
 if (environment.production) {
@@ -244,6 +258,7 @@ if (environment.production) {
 ```
 
 ### Cloud Logging
+
 ```typescript
 // Structured logging in Cloud Functions
 import { logger } from 'firebase-functions/v2';
@@ -256,6 +271,7 @@ logger.info('Job created', {
 ```
 
 ### Alerts Configuration
+
 ```yaml
 # Alert on high error rate
 - alert: HighErrorRate
@@ -275,12 +291,14 @@ logger.info('Job created', {
 ## Security Best Practices
 
 ### Secrets Management
+
 - Store API keys in Firebase Functions config
 - Use environment-specific secrets
 - Rotate secrets regularly
 - Never commit secrets to repository
 
 ### Firestore Security Rules
+
 ```javascript
 rules_version = '2';
 service cloud.firestore {
@@ -295,6 +313,7 @@ service cloud.firestore {
 ```
 
 ### Content Security Policy
+
 ```html
 <!-- meta tag in index.html -->
 <meta http-equiv="Content-Security-Policy"
@@ -307,6 +326,7 @@ service cloud.firestore {
 ## Performance Optimization
 
 ### Frontend Optimization
+
 - **Code splitting**: Lazy load routes and modules
 - **Tree shaking**: Remove unused code
 - **Minification**: Compress JavaScript and CSS
@@ -314,6 +334,7 @@ service cloud.firestore {
 - **Service worker**: Cache static assets
 
 ### Backend Optimization
+
 - **Cold start reduction**: Keep functions warm with scheduled pings
 - **Connection pooling**: Reuse Firestore connections
 - **Caching**: Implement response caching where appropriate
@@ -322,12 +343,14 @@ service cloud.firestore {
 ## Cost Management
 
 ### Monitoring Costs
+
 - Set up billing alerts in GCP Console
 - Monitor function invocations and execution time
 - Track Firestore read/write operations
 - Review bandwidth usage monthly
 
 ### Cost Optimization
+
 - Use Cloud Functions 2nd Gen (cheaper cold starts)
 - Implement proper caching to reduce database reads
 - Optimize function memory allocation
@@ -337,11 +360,13 @@ service cloud.firestore {
 ## Disaster Recovery
 
 ### Backup Strategy
+
 - **Firestore**: Automated daily backups
 - **Storage**: Versioning enabled on all buckets
 - **Configuration**: Git repository as source of truth
 
 ### Recovery Procedures
+
 1. Identify scope of issue
 2. Roll back to last known good deployment
 3. Restore data from backups if needed
