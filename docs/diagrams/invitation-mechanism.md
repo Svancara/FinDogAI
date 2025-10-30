@@ -23,7 +23,7 @@ sequenceDiagram
     CF->>CF: Hash: SHA256("123456") → "abc123..."
     CF->>CF: Set expiresAt = now + 7 days
 
-    CF->>DB: Create /tenants/{tid}/invites/{id}
+    CF->>DB: Create "/tenants/{tid}/invites/{id}"
     Note right of DB: Store:<br/>- codeHash: "abc123..."<br/>- expiresAt: Timestamp<br/>- presetRole: role<br/>- createdBy: UserIdentity<br/>- email: optional<br/>- consumedAt: null
 
     DB-->>CF: Document created
@@ -71,7 +71,7 @@ sequenceDiagram
     CF->>DB: CREATE /tenants/{tid}/teamMembers/{id}
     Note right of DB: Store:<br/>- teamMemberNumber: 5<br/>- name: displayName<br/>- hourlyRate: 0<br/>- authUserId: uid<br/>- createdBy: inviter identity<br/>- createdAt, updatedAt
 
-    CF->>DB: UPDATE /tenants/{tid}/invites/{id}
+    CF->>DB: UPDATE "/tenants/{tid}/invites/{id}"
     Note right of DB: Set:<br/>- consumedAt: now
 
     Note over CF,DB: ATOMIC TRANSACTION COMMIT
@@ -216,7 +216,7 @@ stateDiagram-v2
 
 ```mermaid
 flowchart TD
-    Start([Invite Created]) --> InviteDoc[/tenants/{tid}/invites/{id}]
+    Start([Invite Created]) --> InviteDoc["/tenants/{tid}/invites/{id}"]
 
     InviteDoc --> |Stored| InviteData["codeHash: SHA-256<br/>expiresAt: +7 days<br/>presetRole: role<br/>createdBy: UserIdentity<br/>email: optional<br/>consumedAt: null"]
 
@@ -227,13 +227,13 @@ flowchart TD
     Redeem --> |Invalid/Expired| Error[Error: Invalid invite]
     Redeem --> |Valid| Transaction[Atomic Transaction]
 
-    Transaction --> Seq1[Allocate memberNumber<br/>from /sequences/{tid}/counters]
-    Transaction --> Seq2[Allocate teamMemberNumber<br/>from /sequences/{tid}/counters]
+    Transaction --> Seq1["Allocate memberNumber<br/>from /sequences/{tid}/counters"]
+    Transaction --> Seq2["Allocate teamMemberNumber<br/>from /sequences/{tid}/counters"]
 
-    Seq1 --> Member[CREATE<br/>/tenants/{tid}/members/{uid}]
-    Seq2 --> TeamMember[CREATE<br/>/tenants/{tid}/teamMembers/{id}]
-    Transaction --> Mapping[CREATE<br/>/user_tenants/{uid}/memberships/{tid}]
-    Transaction --> Update[UPDATE<br/>/tenants/{tid}/invites/{id}]
+    Seq1 --> Member["CREATE<br/>/tenants/{tid}/members/{uid}"]
+    Seq2 --> TeamMember["CREATE<br/>/tenants/{tid}/teamMembers/{id}"]
+    Transaction --> Mapping["CREATE<br/>/user_tenants/{uid}/memberships/{tid}"]
+    Transaction --> Update["UPDATE<br/>/tenants/{tid}/invites/{id}"]
 
     Member --> MemberData["memberNumber: allocated<br/>role: presetRole<br/>status: active<br/>displayName, email"]
 
@@ -299,7 +299,8 @@ flowchart LR
 ## 6. Data Structure: Invites Collection Detail
 
 ### Collection Path
-```
+
+```text
 /tenants/{tenantId}/invites/{inviteId}
 ```
 
@@ -361,36 +362,36 @@ gantt
     axisFormat %s
 
     section Invite Creation
-    Owner clicks "Invite"                    :0, 1s
-    Cloud Function generates code            :1s, 2s
-    Hash code (SHA-256)                      :2s, 1s
-    Create /invites/{id} document            :3s, 2s
-    Return code to UI                        :5s, 1s
+    Owner clicks "Invite"                    :0, 1
+    Cloud Function generates code            :1, 2
+    Hash code (SHA-256)                      :2, 1
+    Create /invites/{id} document            :3, 2
+    Return code to UI                        :5, 1
 
     section Sharing Phase
-    Owner shares code                        :6s, 10s
-    Team member receives code                :16s, 5s
+    Owner shares code                        :6, 10
+    Team member receives code                :16, 5
 
     section Redemption
-    Team member enters code                  :21s, 2s
-    redeemInvite() validates                 :23s, 3s
-    Hash comparison                          :26s, 1s
-    Expiration check                         :27s, 1s
+    Team member enters code                  :21, 2
+    redeemInvite() validates                 :23, 3
+    Hash comparison                          :26, 1
+    Expiration check                         :27, 1
 
     section Atomic Transaction
-    Allocate memberNumber                    :28s, 2s
-    Allocate teamMemberNumber                :30s, 2s
-    CREATE /members/{uid}                    :32s, 2s
-    CREATE /user_tenants/{uid}/memberships   :34s, 2s
-    CREATE /teamMembers/{id}                 :36s, 2s
-    UPDATE /invites/{id} (consumedAt)        :38s, 1s
-    Transaction commit                       :39s, 1s
+    Allocate memberNumber                    :28, 2
+    Allocate teamMemberNumber                :30, 2
+    CREATE /members/{uid}                    :32, 2
+    CREATE /user_tenants/{uid}/memberships   :34, 2
+    CREATE /teamMembers/{id}                 :36, 2
+    UPDATE /invites/{id} (consumedAt)        :38, 1
+    Transaction commit                       :39, 1
 
     section Post-Redemption
-    Set custom claim (tenant_id)             :40s, 2s
-    Refresh ID token                         :42s, 2s
-    User switches to tenant                  :44s, 2s
-    Load tenant data                         :46s, 3s
+    Set custom claim (tenant_id)             :40, 2
+    Refresh ID token                         :42, 2
+    User switches to tenant                  :44, 2
+    Load tenant data                         :46, 3
 ```
 
 ## 8. Security Rules for Invites Collection
@@ -626,8 +627,8 @@ exports.redeemInvite = functions
 
 | Collection | Action | When | Data Stored |
 |------------|--------|------|-------------|
-| `/tenants/{tid}/invites/{id}` | **CREATE** | Owner creates invite | codeHash, expiresAt, presetRole, createdBy, email? |
-| `/tenants/{tid}/invites/{id}` | **UPDATE** | Member redeems invite | consumedAt = now |
+| `"/tenants/{tid}/invites/{id}"` | **CREATE** | Owner creates invite | codeHash, expiresAt, presetRole, createdBy, email? |
+| `"/tenants/{tid}/invites/{id}"` | **UPDATE** | Member redeems invite | consumedAt = now |
 | `/sequences/{tid}/counters/memberNumber` | **INCREMENT** | During redemption | currentValue++ |
 | `/sequences/{tid}/counters/teamMemberNumber` | **INCREMENT** | During redemption | currentValue++ |
 | `/tenants/{tid}/members/{uid}` | **CREATE** | Member redeems invite | memberNumber, role, status, displayName, email |
@@ -636,6 +637,7 @@ exports.redeemInvite = functions
 | `/tenants/{tid}/audit_logs/{id}` | **CREATE** | After each operation | operation, collection, documentId, author, before/after |
 
 ### Total Database Operations Per Redemption: 8 writes
+
 1. Read invite document (validate)
 2. Increment memberNumber counter
 3. Increment teamMemberNumber counter

@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+			<html style="--markdown-font-family: -apple-system, BlinkMacSystemFont, &#39;Segoe WPC&#39;, &#39;Segoe UI&#39;, system-ui, &#39;Ubuntu&#39;, &#39;Droid Sans&#39;, sans-serif; --markdown-font-size: 14px; --markdown-line-height: 1.6;">
+			<head>
+				<meta http-equiv="Content-type" content="text/html;charset=UTF-8">
+				<meta http-equiv="Content-Security-Policy" content="default-src &#39;none&#39;; img-src &#39;self&#39; &#39;self&#39; https://*.vscode-cdn.net https: data:; media-src &#39;self&#39; &#39;self&#39; https://*.vscode-cdn.net https: data:; script-src &#39;nonce-lRLKqMImbyAPwuRioWfsLyg1ip816KQZqDOzszFYOp1UDqzoMJD8OPv6j3V7zgOQ&#39;; style-src &#39;self&#39; &#39;self&#39; https://*.vscode-cdn.net &#39;unsafe-inline&#39; https: data:; font-src &#39;self&#39; &#39;self&#39; https://*.vscode-cdn.net https: data:;">
+				<meta id="vscode-markdown-preview-data"
+					data-settings="{&quot;source&quot;:&quot;file:///e%3A/Projekty/FinDogAI_BMAD_pokus_01/findogai/docs/diagrams/invitation-mechanism.md&quot;,&quot;scrollPreviewWithEditor&quot;:true,&quot;scrollEditorWithPreview&quot;:true,&quot;doubleClickToSwitchToEditor&quot;:true,&quot;disableSecurityWarnings&quot;:false,&quot;webviewResourceRoot&quot;:&quot;file:///e%3A/Projekty/FinDogAI_BMAD_pokus_01/findogai/docs/diagrams/invitation-mechanism.md&quot;}"
+					data-strings="{&quot;cspAlertMessageText&quot;:&quot;Some content has been disabled in this document&quot;,&quot;cspAlertMessageTitle&quot;:&quot;Potentially unsafe or insecure content has been disabled in the Markdown preview. Change the Markdown preview security setting to allow insecure content or enable scripts&quot;,&quot;cspAlertMessageLabel&quot;:&quot;Content Disabled Security Warning&quot;}"
+					data-state="{&quot;resource&quot;:&quot;file:///e%3A/Projekty/FinDogAI_BMAD_pokus_01/findogai/docs/diagrams/invitation-mechanism.md&quot;,&quot;line&quot;:335.24657814096014,&quot;resourceColumn&quot;:1,&quot;locked&quot;:false}"
+					>
+				<script src="file:///c%3A/Programs2/Microsoft%20VS%20Code/resources/app/extensions/markdown-language-features/media/pre.js" nonce="lRLKqMImbyAPwuRioWfsLyg1ip816KQZqDOzszFYOp1UDqzoMJD8OPv6j3V7zgOQ"></script>
+				<link rel="stylesheet" type="text/css" href="file:///c%3A/Programs2/Microsoft%20VS%20Code/resources/app/extensions/github/markdown.css">
+<link rel="stylesheet" type="text/css" href="file:///c%3A/Programs2/Microsoft%20VS%20Code/resources/app/extensions/markdown-language-features/media/markdown.css">
+<link rel="stylesheet" type="text/css" href="file:///c%3A/Programs2/Microsoft%20VS%20Code/resources/app/extensions/markdown-language-features/media/highlight.css">
+<link rel="stylesheet" type="text/css" href="file:///c%3A/Programs2/Microsoft%20VS%20Code/resources/app/extensions/markdown-math/notebook-out/katex.min.css">
+<link rel="stylesheet" type="text/css" href="file:///c%3A/Programs2/Microsoft%20VS%20Code/resources/app/extensions/markdown-math/preview-styles/index.css">
+<link rel="stylesheet" type="text/css" href="file:///c%3A/Users/bs/.vscode/extensions/ultrabytesoftwares.markdown-tree-1.1.0/style/branched.css">
+			
+			
+				<base href="file:///e%3A/Projekty/FinDogAI_BMAD_pokus_01/findogai/docs/diagrams/invitation-mechanism.md">
+			</head>
+			<body class="vscode-body scrollBeyondLastLine wordWrap showEditorSelection vscode-dark">
+				<div class="markdown-body" dir="auto"><span id="mermaid" aria-hidden="true"
+                    data-dark-mode-theme="redux-dark"
+                    data-light-mode-theme="redux"
+                    data-max-text-size="undefined"></span>
+                <h1 data-line="0" class="code-line" dir="auto" id="member-invitation-mechanism---database--flow-diagrams">Member Invitation Mechanism - Database &amp; Flow Diagrams</h1>
+<h2 data-line="2" class="code-line" dir="auto" id="1-complete-invitation-flow-sequence-diagram">1. Complete Invitation Flow Sequence Diagram</h2>
+<pre style="all:unset;"><div class="mermaid">sequenceDiagram
+    participant Owner as Owner/Rep
+    participant App
+    participant CF as Cloud Function
+    participant DB as Firestore
+    participant NewMember as New Team Member
+    participant Auth as Firebase Auth
+
+    Note over Owner,Auth: INVITE CREATION PHASE
+
+    Owner-&gt;&gt;App: Click "Invite Member"
+    App-&gt;&gt;Owner: Show invite form
+    Owner-&gt;&gt;App: Submit form&lt;br/&gt;(role, optional email)
+
+    App-&gt;&gt;CF: createInvite({tenantId, role, email?})
+    CF-&gt;&gt;CF: Validate: caller is Owner/Rep
+    CF-&gt;&gt;CF: Generate 6-digit code: "123456"
+    CF-&gt;&gt;CF: Hash: SHA256("123456") → "abc123..."
+    CF-&gt;&gt;CF: Set expiresAt = now + 7 days
+
+    CF-&gt;&gt;DB: Create "/tenants/{tid}/invites/{id}"
+    Note right of DB: Store:&lt;br/&gt;- codeHash: "abc123..."&lt;br/&gt;- expiresAt: Timestamp&lt;br/&gt;- presetRole: role&lt;br/&gt;- createdBy: UserIdentity&lt;br/&gt;- email: optional&lt;br/&gt;- consumedAt: null
+
+    DB--&gt;&gt;CF: Document created
+    CF--&gt;&gt;App: Return code: "123456"
+    App--&gt;&gt;Owner: Display code (copy/QR)
+
+    Owner-&gt;&gt;Owner: Share code with team member&lt;br/&gt;(email, SMS, etc.)
+
+    Note over Owner,Auth: INVITE REDEMPTION PHASE
+
+    NewMember-&gt;&gt;App: Sign up / Log in
+    App-&gt;&gt;Auth: Authentication
+    Auth--&gt;&gt;App: Return UID + token
+
+    NewMember-&gt;&gt;App: Enter "Join Team" screen
+    App-&gt;&gt;NewMember: Request invite code
+    NewMember-&gt;&gt;App: Paste/enter code: "123456"
+
+    App-&gt;&gt;CF: redeemInvite({code: "123456"})
+
+    CF-&gt;&gt;CF: Hash provided code:&lt;br/&gt;SHA256("123456") → "abc123..."
+
+    CF-&gt;&gt;DB: Query invites:&lt;br/&gt;WHERE codeHash="abc123..."&lt;br/&gt;AND consumedAt=null
+    DB--&gt;&gt;CF: Return matching invite
+
+    CF-&gt;&gt;CF: Validate: expiresAt &gt; now
+    CF-&gt;&gt;CF: Validate: consumedAt == null
+    CF-&gt;&gt;CF: Validate: email match (if set)
+    CF-&gt;&gt;CF: Extract: tenantId, presetRole
+
+    Note over CF,DB: ATOMIC TRANSACTION START
+
+    CF-&gt;&gt;DB: allocateSequence(tenantId, 'memberNumber')
+    DB--&gt;&gt;CF: Return memberNumber (e.g., 3)
+
+    CF-&gt;&gt;DB: allocateSequence(tenantId, 'teamMemberNumber')
+    DB--&gt;&gt;CF: Return teamMemberNumber (e.g., 5)
+
+    CF-&gt;&gt;DB: CREATE /tenants/{tid}/members/{uid}
+    Note right of DB: Store:&lt;br/&gt;- memberNumber: 3&lt;br/&gt;- role: presetRole&lt;br/&gt;- status: "active"&lt;br/&gt;- displayName, email&lt;br/&gt;- createdAt, updatedAt
+
+    CF-&gt;&gt;DB: CREATE /user_tenants/{uid}/memberships/{tid}
+    Note right of DB: Store:&lt;br/&gt;- tenantId&lt;br/&gt;- role: presetRole&lt;br/&gt;- createdAt, updatedAt
+
+    CF-&gt;&gt;DB: CREATE /tenants/{tid}/teamMembers/{id}
+    Note right of DB: Store:&lt;br/&gt;- teamMemberNumber: 5&lt;br/&gt;- name: displayName&lt;br/&gt;- hourlyRate: 0&lt;br/&gt;- authUserId: uid&lt;br/&gt;- createdBy: inviter identity&lt;br/&gt;- createdAt, updatedAt
+
+    CF-&gt;&gt;DB: UPDATE "/tenants/{tid}/invites/{id}"
+    Note right of DB: Set:&lt;br/&gt;- consumedAt: now
+
+    Note over CF,DB: ATOMIC TRANSACTION COMMIT
+
+    CF-&gt;&gt;CF: setActiveTenantClaim(uid, tenantId)
+    Note right of CF: Inject custom claim&lt;br/&gt;"tenant_id" into JWT
+
+    CF--&gt;&gt;App: Success response
+
+    App-&gt;&gt;Auth: Force refresh ID token
+    Auth--&gt;&gt;App: New token with tenant_id claim
+
+    App-&gt;&gt;App: Switch to joined tenant
+    App-&gt;&gt;DB: Query tenant data&lt;br/&gt;(jobs, resources, etc.)
+    DB--&gt;&gt;App: Return accessible data
+
+    App--&gt;&gt;NewMember: Redirect to home screen&lt;br/&gt;(joined successfully)</div></pre>
+<h2 data-line="93" class="code-line" dir="auto" id="2-database-schema-for-invitation-mechanism">2. Database Schema for Invitation Mechanism</h2>
+<pre style="all:unset;"><div class="mermaid">erDiagram
+    INVITES ||--o| MEMBERS : "creates on redemption"
+    INVITES ||--o| USER_TENANTS : "creates on redemption"
+    INVITES ||--o| TEAM_MEMBERS : "creates on redemption"
+    INVITES }o--|| TENANT : "belongs to"
+    INVITES }o--|| SEQUENCES : "allocates memberNumber"
+    INVITES }o--|| SEQUENCES : "allocates teamMemberNumber"
+    MEMBERS }o--|| TENANT : "belongs to"
+    TEAM_MEMBERS }o--|| TENANT : "belongs to"
+    USER_TENANTS }o--|| FIREBASE_USER : "maps"
+
+    INVITES {
+        string inviteId PK "Auto-generated UUID"
+        string tenantId FK "Owner tenant"
+        string codeHash "SHA-256 of 6-digit code"
+        timestamp expiresAt "7 days from creation"
+        object createdBy "UserIdentity {uid, memberNumber, displayName}"
+        string presetRole "representative | teamMember"
+        timestamp consumedAt "NULL until redeemed"
+        string email "Optional pre-assignment"
+        timestamp createdAt "Server timestamp"
+        timestamp updatedAt "Server timestamp"
+    }
+
+    MEMBERS {
+        string uid PK "Firebase Auth UID"
+        string tenantId FK "Joined tenant"
+        int memberNumber "Sequential (1,2,3...)"
+        string displayName "Cached from profile"
+        string email "Cached from profile"
+        string role "owner | representative | teamMember"
+        string status "active | disabled"
+        timestamp lastSeenAt "Last activity"
+        timestamp createdAt "Server timestamp"
+        timestamp updatedAt "Server timestamp"
+    }
+
+    USER_TENANTS {
+        string uid PK "Firebase Auth UID"
+        string tenantId PK "Tenant membership"
+        string role "Cached role"
+        timestamp createdAt "Server timestamp"
+        timestamp updatedAt "Server timestamp"
+    }
+
+    TEAM_MEMBERS {
+        string teamMemberId PK "Auto-generated UUID"
+        string tenantId FK "Owner tenant"
+        int teamMemberNumber "Sequential (1,2,3...)"
+        string name "Display name"
+        number hourlyRate "Labor cost rate"
+        string authUserId "Firebase UID or null"
+        object createdBy "UserIdentity"
+        timestamp createdAt "Server timestamp"
+        object updatedBy "UserIdentity"
+        timestamp updatedAt "Server timestamp"
+    }
+
+    SEQUENCES {
+        string tenantId PK "Tenant owner"
+        string counterType PK "memberNumber | teamMemberNumber | etc"
+        int currentValue "Last allocated number"
+        timestamp updatedAt "Last increment"
+    }
+
+    TENANT {
+        string tenantId PK "UUID"
+        int schemaVersion "Schema version"
+        timestamp createdAt "Creation time"
+        timestamp updatedAt "Last update"
+    }
+
+    FIREBASE_USER {
+        string uid PK "Firebase Auth UID"
+        string email "User email"
+        string displayName "User name"
+        timestamp createdAt "Registration time"
+    }</div></pre>
+<h2 data-line="176" class="code-line" dir="auto" id="3-invite-states-and-lifecycle">3. Invite States and Lifecycle</h2>
+<pre style="all:unset;"><div class="mermaid">stateDiagram-v2
+    [*] --&gt; Pending : Owner creates invite&lt;br/&gt;Cloud Function generates code
+
+    Pending --&gt; Consumed : Team member redeems&lt;br/&gt;with valid code
+    Pending --&gt; Expired : 7 days pass&lt;br/&gt;expiresAt &lt; now
+    Pending --&gt; Revoked : Owner deletes invite
+
+    Consumed --&gt; [*] : Member joined&lt;br/&gt;consumedAt set
+    Expired --&gt; [*] : Cleanup process&lt;br/&gt;or remains archived
+    Revoked --&gt; [*] : Deleted from DB
+
+    note right of Pending
+        Database State:
+        - codeHash: stored
+        - expiresAt: future
+        - consumedAt: null
+        - Status: Active
+    end note
+
+    note right of Consumed
+        Database State:
+        - consumedAt: timestamp
+        - Member created
+        - TeamMember created
+        - UserTenant mapping created
+    end note
+
+    note right of Expired
+        Database State:
+        - expiresAt: past
+        - consumedAt: null
+        - Cannot be redeemed
+    end note</div></pre>
+<h2 data-line="214" class="code-line" dir="auto" id="4-database-collections-modified-during-invitation-flow">4. Database Collections Modified During Invitation Flow</h2>
+<pre style="all:unset;"><div class="mermaid">flowchart TD
+    Start([Invite Created]) --&gt; InviteDoc["/tenants/{tid}/invites/{id}"]
+
+    InviteDoc --&gt; |Stored| InviteData["codeHash: SHA-256&lt;br/&gt;expiresAt: +7 days&lt;br/&gt;presetRole: role&lt;br/&gt;createdBy: UserIdentity&lt;br/&gt;email: optional&lt;br/&gt;consumedAt: null"]
+
+    InviteData --&gt; Share[Owner shares code&lt;br/&gt;with team member]
+
+    Share --&gt; Redeem{Team member&lt;br/&gt;redeems code}
+
+    Redeem --&gt; |Invalid/Expired| Error[Error: Invalid invite]
+    Redeem --&gt; |Valid| Transaction[Atomic Transaction]
+
+    Transaction --&gt; Seq1["Allocate memberNumber&lt;br/&gt;from /sequences/{tid}/counters"]
+    Transaction --&gt; Seq2["Allocate teamMemberNumber&lt;br/&gt;from /sequences/{tid}/counters"]
+
+    Seq1 --&gt; Member["CREATE&lt;br/&gt;/tenants/{tid}/members/{uid}"]
+    Seq2 --&gt; TeamMember["CREATE&lt;br/&gt;/tenants/{tid}/teamMembers/{id}"]
+    Transaction --&gt; Mapping["CREATE&lt;br/&gt;/user_tenants/{uid}/memberships/{tid}"]
+    Transaction --&gt; Update["UPDATE&lt;br/&gt;/tenants/{tid}/invites/{id}"]
+
+    Member --&gt; MemberData["memberNumber: allocated&lt;br/&gt;role: presetRole&lt;br/&gt;status: active&lt;br/&gt;displayName, email"]
+
+    TeamMember --&gt; TMData["teamMemberNumber: allocated&lt;br/&gt;name: displayName&lt;br/&gt;hourlyRate: 0&lt;br/&gt;authUserId: uid"]
+
+    Mapping --&gt; MapData["tenantId: tid&lt;br/&gt;role: presetRole"]
+
+    Update --&gt; InviteUpdate["consumedAt: NOW&lt;br/&gt;(marks as used)"]
+
+    MemberData --&gt; Claim[Set Custom Claim&lt;br/&gt;tenant_id in JWT]
+    TMData --&gt; Claim
+    MapData --&gt; Claim
+    InviteUpdate --&gt; Claim
+
+    Claim --&gt; Complete([Team Member Joined])
+
+    style InviteDoc fill:#e1f5ff
+    style Member fill:#c8e6c9
+    style TeamMember fill:#c8e6c9
+    style Mapping fill:#c8e6c9
+    style Update fill:#fff9c4
+    style Transaction fill:#f3e5f5</div></pre>
+<h2 data-line="260" class="code-line" dir="auto" id="5-invite-code-security-flow">5. Invite Code Security Flow</h2>
+<pre style="all:unset;"><div class="mermaid">flowchart LR
+    A[Generate Code] --&gt; B["6-digit random&lt;br/&gt;e.g., 123456"]
+    B --&gt; C["SHA-256 Hash&lt;br/&gt;abc123...def456"]
+    C --&gt; D["Store ONLY hash&lt;br/&gt;in Firestore"]
+    D --&gt; E[Return code to Owner&lt;br/&gt;ONE TIME display]
+
+    E --&gt; F[Owner shares code&lt;br/&gt;via email/SMS]
+    F --&gt; G[Team member enters code]
+
+    G --&gt; H["Compute SHA-256&lt;br/&gt;of entered code"]
+    H --&gt; I["Query DB:&lt;br/&gt;WHERE codeHash = hash"]
+
+    I --&gt; J{Match found?}
+    J --&gt; |No| K[Error: Invalid code]
+    J --&gt; |Yes| L{Expired?}
+
+    L --&gt; |Yes| M[Error: Expired]
+    L --&gt; |No| N{Already used?}
+
+    N --&gt; |Yes| O[Error: Already redeemed]
+    N --&gt; |No| P{Email match?}
+
+    P --&gt; |If set, must match| Q[Validate email]
+    P --&gt; |Not set| R[Proceed to redemption]
+    Q --&gt; |Match| R
+    Q --&gt; |No match| S[Error: Wrong email]
+
+    R --&gt; T[Create memberships&lt;br/&gt;Mark invite consumed]
+
+    style D fill:#ffcdd2
+    style E fill:#fff9c4
+    style H fill:#c8e6c9
+    style T fill:#c8e6c9</div></pre>
+<h2 data-line="298" class="code-line" dir="auto" id="6-data-structure-invites-collection-detail">6. Data Structure: Invites Collection Detail</h2>
+<h3 data-line="300" class="code-line" dir="auto" id="collection-path">Collection Path</h3>
+<pre><code data-line="302" class="code-line language-text" dir="auto">/tenants/{tenantId}/invites/{inviteId}
+</code></pre>
+<h3 data-line="306" class="code-line" dir="auto" id="document-schema">Document Schema</h3>
+<pre><code data-line="308" class="code-line language-yaml" dir="auto"><span class="hljs-attr">inviteId:</span> <span class="hljs-string">&quot;auto-generated-uuid&quot;</span>
+<span class="hljs-attr">tenantId:</span> <span class="hljs-string">&quot;owner-tenant-uuid&quot;</span>
+
+<span class="hljs-comment"># Security - Code never stored in plaintext</span>
+<span class="hljs-attr">codeHash:</span> <span class="hljs-string">&quot;e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855&quot;</span>  <span class="hljs-comment"># SHA-256</span>
+
+<span class="hljs-comment"># Expiration</span>
+<span class="hljs-attr">expiresAt:</span> <span class="hljs-string">Timestamp</span>  <span class="hljs-comment"># now + 7 days (604,800 seconds)</span>
+<span class="hljs-attr">createdAt:</span> <span class="hljs-string">Timestamp</span>  <span class="hljs-comment"># Server timestamp</span>
+<span class="hljs-attr">updatedAt:</span> <span class="hljs-string">Timestamp</span>  <span class="hljs-comment"># Server timestamp</span>
+
+<span class="hljs-comment"># Creator Information (Compound Identity)</span>
+<span class="hljs-attr">createdBy:</span>
+  <span class="hljs-attr">uid:</span> <span class="hljs-string">&quot;firebase-auth-uid&quot;</span>
+  <span class="hljs-attr">memberNumber:</span> <span class="hljs-number">1</span>  <span class="hljs-comment"># Tenant-specific ID</span>
+  <span class="hljs-attr">displayName:</span> <span class="hljs-string">&quot;John Doe&quot;</span>
+
+<span class="hljs-comment"># Invite Configuration</span>
+<span class="hljs-attr">presetRole:</span> <span class="hljs-string">&quot;representative&quot;</span>  <span class="hljs-comment"># or &quot;teamMember&quot;</span>
+
+<span class="hljs-comment"># Optional Pre-assignment</span>
+<span class="hljs-attr">email:</span> <span class="hljs-string">&quot;newmember@example.com&quot;</span>  <span class="hljs-comment"># Optional - binds invite to specific email</span>
+
+<span class="hljs-comment"># Redemption Tracking</span>
+<span class="hljs-attr">consumedAt:</span> <span class="hljs-literal">null</span>  <span class="hljs-comment"># or Timestamp when redeemed (for single-use enforcement)</span>
+</code></pre>
+<h3 data-line="336" class="code-line" dir="auto" id="indexes">Indexes</h3>
+<pre><code data-line="338" class="code-line language-yaml" dir="auto"><span class="hljs-comment"># Single field indexes</span>
+<span class="hljs-bullet">-</span> <span class="hljs-attr">field:</span> <span class="hljs-string">expiresAt</span>
+  <span class="hljs-attr">order:</span> <span class="hljs-string">ASC</span>
+  <span class="hljs-attr">purpose:</span> <span class="hljs-string">Cleanup</span> <span class="hljs-string">queries</span> <span class="hljs-string">for</span> <span class="hljs-string">expired</span> <span class="hljs-string">invites</span>
+
+<span class="hljs-bullet">-</span> <span class="hljs-attr">field:</span> <span class="hljs-string">consumedAt</span>
+  <span class="hljs-attr">order:</span> <span class="hljs-string">ASC</span>
+  <span class="hljs-attr">purpose:</span> <span class="hljs-string">Filter</span> <span class="hljs-string">pending</span> <span class="hljs-string">vs</span> <span class="hljs-string">consumed</span> <span class="hljs-string">invites</span>
+
+<span class="hljs-comment"># Composite indexes</span>
+<span class="hljs-bullet">-</span> <span class="hljs-attr">fields:</span>
+    <span class="hljs-bullet">-</span> <span class="hljs-attr">codeHash:</span> <span class="hljs-string">ASC</span>
+    <span class="hljs-bullet">-</span> <span class="hljs-attr">consumedAt:</span> <span class="hljs-string">ASC</span>
+  <span class="hljs-attr">purpose:</span> <span class="hljs-string">Fast</span> <span class="hljs-string">lookup</span> <span class="hljs-string">during</span> <span class="hljs-string">redemption</span> <span class="hljs-string">validation</span>
+</code></pre>
+<h2 data-line="355" class="code-line" dir="auto" id="7-database-state-changes-timeline">7. Database State Changes Timeline</h2>
+<pre style="all:unset;"><div class="mermaid">gantt
+    title Invitation Mechanism - Database Changes Timeline
+    dateFormat X
+    axisFormat %s
+
+    section Invite Creation
+    Owner clicks "Invite"                    :0, 1
+    Cloud Function generates code            :1, 2
+    Hash code (SHA-256)                      :2, 1
+    Create /invites/{id} document            :3, 2
+    Return code to UI                        :5, 1
+
+    section Sharing Phase
+    Owner shares code                        :6, 10
+    Team member receives code                :16, 5
+
+    section Redemption
+    Team member enters code                  :21, 2
+    redeemInvite() validates                 :23, 3
+    Hash comparison                          :26, 1
+    Expiration check                         :27, 1
+
+    section Atomic Transaction
+    Allocate memberNumber                    :28, 2
+    Allocate teamMemberNumber                :30, 2
+    CREATE /members/{uid}                    :32, 2
+    CREATE /user_tenants/{uid}/memberships   :34, 2
+    CREATE /teamMembers/{id}                 :36, 2
+    UPDATE /invites/{id} (consumedAt)        :38, 1
+    Transaction commit                       :39, 1
+
+    section Post-Redemption
+    Set custom claim (tenant_id)             :40, 2
+    Refresh ID token                         :42, 2
+    User switches to tenant                  :44, 2
+    Load tenant data                         :46, 3</div></pre>
+<h2 data-line="396" class="code-line" dir="auto" id="8-security-rules-for-invites-collection">8. Security Rules for Invites Collection</h2>
+<pre><code data-line="398" class="code-line language-javascript" dir="auto"><span class="hljs-comment">// Firestore Security Rules</span>
+match /tenants/{tenantId}/invites/{inviteId} {
+
+  <span class="hljs-comment">// READ: All active members can see pending/consumed invites</span>
+  allow <span class="hljs-attr">read</span>: <span class="hljs-keyword">if</span> <span class="hljs-title function_">isActiveMember</span>(tenantId);
+
+  <span class="hljs-comment">// CREATE: Only owner or representative can create invites</span>
+  allow <span class="hljs-attr">create</span>: <span class="hljs-keyword">if</span> <span class="hljs-title function_">isOwnerOrRepresentative</span>(tenantId)
+    &amp;&amp; <span class="hljs-title function_">documentHasTenantId</span>(tenantId)
+    &amp;&amp; <span class="hljs-title function_">auditMetadataValid</span>()
+    &amp;&amp; <span class="hljs-title function_">canWriteToTenant</span>(tenantId);
+
+  <span class="hljs-comment">// UPDATE: Immutable after creation (only Cloud Function can mark consumed)</span>
+  allow <span class="hljs-attr">update</span>: <span class="hljs-keyword">if</span> <span class="hljs-literal">false</span>;
+
+  <span class="hljs-comment">// DELETE: Only owner can revoke (delete) pending invites</span>
+  allow <span class="hljs-attr">delete</span>: <span class="hljs-keyword">if</span> <span class="hljs-title function_">isOwner</span>(tenantId)
+    &amp;&amp; <span class="hljs-title function_">canWriteToTenant</span>(tenantId);
+}
+
+<span class="hljs-comment">// Helper functions</span>
+<span class="hljs-keyword">function</span> <span class="hljs-title function_">isActiveMember</span>(<span class="hljs-params">tenantId</span>) {
+  <span class="hljs-keyword">return</span> <span class="hljs-title function_">exists</span>(<span class="hljs-regexp">/databases/</span>$(database)/documents/tenants/$(tenantId)/members/$(request.<span class="hljs-property">auth</span>.<span class="hljs-property">uid</span>))
+    &amp;&amp; <span class="hljs-title function_">get</span>(<span class="hljs-regexp">/databases/</span>$(database)/documents/tenants/$(tenantId)/members/$(request.<span class="hljs-property">auth</span>.<span class="hljs-property">uid</span>)).<span class="hljs-property">data</span>.<span class="hljs-property">status</span> == <span class="hljs-string">&#x27;active&#x27;</span>;
+}
+
+<span class="hljs-keyword">function</span> <span class="hljs-title function_">isOwnerOrRepresentative</span>(<span class="hljs-params">tenantId</span>) {
+  <span class="hljs-keyword">let</span> memberDoc = <span class="hljs-title function_">get</span>(<span class="hljs-regexp">/databases/</span>$(database)/documents/tenants/$(tenantId)/members/$(request.<span class="hljs-property">auth</span>.<span class="hljs-property">uid</span>));
+  <span class="hljs-keyword">return</span> memberDoc.<span class="hljs-property">data</span>.<span class="hljs-property">status</span> == <span class="hljs-string">&#x27;active&#x27;</span>
+    &amp;&amp; (memberDoc.<span class="hljs-property">data</span>.<span class="hljs-property">role</span> == <span class="hljs-string">&#x27;owner&#x27;</span> || memberDoc.<span class="hljs-property">data</span>.<span class="hljs-property">role</span> == <span class="hljs-string">&#x27;representative&#x27;</span>);
+}
+
+<span class="hljs-keyword">function</span> <span class="hljs-title function_">isOwner</span>(<span class="hljs-params">tenantId</span>) {
+  <span class="hljs-keyword">let</span> memberDoc = <span class="hljs-title function_">get</span>(<span class="hljs-regexp">/databases/</span>$(database)/documents/tenants/$(tenantId)/members/$(request.<span class="hljs-property">auth</span>.<span class="hljs-property">uid</span>));
+  <span class="hljs-keyword">return</span> memberDoc.<span class="hljs-property">data</span>.<span class="hljs-property">status</span> == <span class="hljs-string">&#x27;active&#x27;</span> &amp;&amp; memberDoc.<span class="hljs-property">data</span>.<span class="hljs-property">role</span> == <span class="hljs-string">&#x27;owner&#x27;</span>;
+}
+</code></pre>
+<h2 data-line="437" class="code-line" dir="auto" id="9-cloud-functions-for-invitation-mechanism">9. Cloud Functions for Invitation Mechanism</h2>
+<h3 data-line="439" class="code-line" dir="auto" id="function-1-createinvite">Function 1: createInvite</h3>
+<pre><code data-line="441" class="code-line language-typescript" dir="auto"><span class="hljs-comment">// HTTPS Callable Function</span>
+<span class="hljs-built_in">exports</span>.<span class="hljs-property">createInvite</span> = functions
+  .<span class="hljs-title function_">region</span>(<span class="hljs-string">&#x27;europe-west1&#x27;</span>)
+  .<span class="hljs-property">https</span>.<span class="hljs-title function_">onCall</span>(<span class="hljs-keyword">async</span> (data, context) =&gt; {
+    <span class="hljs-comment">// Validate authentication</span>
+    <span class="hljs-keyword">if</span> (!context.<span class="hljs-property">auth</span>) {
+      <span class="hljs-keyword">throw</span> <span class="hljs-keyword">new</span> functions.<span class="hljs-property">https</span>.<span class="hljs-title class_">HttpsError</span>(<span class="hljs-string">&#x27;unauthenticated&#x27;</span>, <span class="hljs-string">&#x27;User must be authenticated&#x27;</span>);
+    }
+
+    <span class="hljs-keyword">const</span> { tenantId, presetRole, email } = data;
+    <span class="hljs-keyword">const</span> uid = context.<span class="hljs-property">auth</span>.<span class="hljs-property">uid</span>;
+
+    <span class="hljs-comment">// Validate caller is owner or representative</span>
+    <span class="hljs-keyword">const</span> memberDoc = <span class="hljs-keyword">await</span> admin.<span class="hljs-title function_">firestore</span>()
+      .<span class="hljs-title function_">doc</span>(<span class="hljs-string">`tenants/<span class="hljs-subst">${tenantId}</span>/members/<span class="hljs-subst">${uid}</span>`</span>)
+      .<span class="hljs-title function_">get</span>();
+
+    <span class="hljs-keyword">if</span> (!memberDoc.<span class="hljs-property">exists</span> || ![<span class="hljs-string">&#x27;owner&#x27;</span>, <span class="hljs-string">&#x27;representative&#x27;</span>].<span class="hljs-title function_">includes</span>(memberDoc.<span class="hljs-title function_">data</span>().<span class="hljs-property">role</span>)) {
+      <span class="hljs-keyword">throw</span> <span class="hljs-keyword">new</span> functions.<span class="hljs-property">https</span>.<span class="hljs-title class_">HttpsError</span>(<span class="hljs-string">&#x27;permission-denied&#x27;</span>, <span class="hljs-string">&#x27;Insufficient permissions&#x27;</span>);
+    }
+
+    <span class="hljs-comment">// Generate 6-digit code</span>
+    <span class="hljs-keyword">const</span> code = <span class="hljs-title class_">Math</span>.<span class="hljs-title function_">floor</span>(<span class="hljs-number">100000</span> + <span class="hljs-title class_">Math</span>.<span class="hljs-title function_">random</span>() * <span class="hljs-number">900000</span>).<span class="hljs-title function_">toString</span>();
+
+    <span class="hljs-comment">// Hash the code</span>
+    <span class="hljs-keyword">const</span> codeHash = crypto.<span class="hljs-title function_">createHash</span>(<span class="hljs-string">&#x27;sha256&#x27;</span>).<span class="hljs-title function_">update</span>(code).<span class="hljs-title function_">digest</span>(<span class="hljs-string">&#x27;hex&#x27;</span>);
+
+    <span class="hljs-comment">// Create invite document</span>
+    <span class="hljs-keyword">const</span> inviteRef = admin.<span class="hljs-title function_">firestore</span>()
+      .<span class="hljs-title function_">collection</span>(<span class="hljs-string">`tenants/<span class="hljs-subst">${tenantId}</span>/invites`</span>)
+      .<span class="hljs-title function_">doc</span>();
+
+    <span class="hljs-keyword">const</span> inviteData = {
+      tenantId,
+      codeHash,
+      <span class="hljs-attr">expiresAt</span>: admin.<span class="hljs-property">firestore</span>.<span class="hljs-property">Timestamp</span>.<span class="hljs-title function_">fromDate</span>(
+        <span class="hljs-keyword">new</span> <span class="hljs-title class_">Date</span>(<span class="hljs-title class_">Date</span>.<span class="hljs-title function_">now</span>() + <span class="hljs-number">7</span> * <span class="hljs-number">24</span> * <span class="hljs-number">60</span> * <span class="hljs-number">60</span> * <span class="hljs-number">1000</span>) <span class="hljs-comment">// 7 days</span>
+      ),
+      <span class="hljs-attr">createdBy</span>: {
+        uid,
+        <span class="hljs-attr">memberNumber</span>: memberDoc.<span class="hljs-title function_">data</span>().<span class="hljs-property">memberNumber</span>,
+        <span class="hljs-attr">displayName</span>: memberDoc.<span class="hljs-title function_">data</span>().<span class="hljs-property">displayName</span>
+      },
+      presetRole,
+      <span class="hljs-attr">email</span>: email || <span class="hljs-literal">null</span>,
+      <span class="hljs-attr">consumedAt</span>: <span class="hljs-literal">null</span>,
+      <span class="hljs-attr">createdAt</span>: admin.<span class="hljs-property">firestore</span>.<span class="hljs-property">FieldValue</span>.<span class="hljs-title function_">serverTimestamp</span>(),
+      <span class="hljs-attr">updatedAt</span>: admin.<span class="hljs-property">firestore</span>.<span class="hljs-property">FieldValue</span>.<span class="hljs-title function_">serverTimestamp</span>()
+    };
+
+    <span class="hljs-keyword">await</span> inviteRef.<span class="hljs-title function_">set</span>(inviteData);
+
+    <span class="hljs-comment">// Return code (one-time display)</span>
+    <span class="hljs-keyword">return</span> {
+      <span class="hljs-attr">inviteId</span>: inviteRef.<span class="hljs-property">id</span>,
+      code,  <span class="hljs-comment">// Original code returned ONCE</span>
+      <span class="hljs-attr">expiresAt</span>: inviteData.<span class="hljs-property">expiresAt</span>.<span class="hljs-title function_">toDate</span>().<span class="hljs-title function_">toISOString</span>()
+    };
+  });
+</code></pre>
+<h3 data-line="503" class="code-line" dir="auto" id="function-2-redeeminvite">Function 2: redeemInvite</h3>
+<pre><code data-line="505" class="code-line language-typescript" dir="auto"><span class="hljs-comment">// HTTPS Callable Function</span>
+<span class="hljs-built_in">exports</span>.<span class="hljs-property">redeemInvite</span> = functions
+  .<span class="hljs-title function_">region</span>(<span class="hljs-string">&#x27;europe-west1&#x27;</span>)
+  .<span class="hljs-property">https</span>.<span class="hljs-title function_">onCall</span>(<span class="hljs-keyword">async</span> (data, context) =&gt; {
+    <span class="hljs-comment">// Validate authentication</span>
+    <span class="hljs-keyword">if</span> (!context.<span class="hljs-property">auth</span>) {
+      <span class="hljs-keyword">throw</span> <span class="hljs-keyword">new</span> functions.<span class="hljs-property">https</span>.<span class="hljs-title class_">HttpsError</span>(<span class="hljs-string">&#x27;unauthenticated&#x27;</span>, <span class="hljs-string">&#x27;User must be authenticated&#x27;</span>);
+    }
+
+    <span class="hljs-keyword">const</span> { code } = data;
+    <span class="hljs-keyword">const</span> uid = context.<span class="hljs-property">auth</span>.<span class="hljs-property">uid</span>;
+    <span class="hljs-keyword">const</span> userEmail = context.<span class="hljs-property">auth</span>.<span class="hljs-property">token</span>.<span class="hljs-property">email</span>;
+    <span class="hljs-keyword">const</span> displayName = context.<span class="hljs-property">auth</span>.<span class="hljs-property">token</span>.<span class="hljs-property">name</span> || userEmail;
+
+    <span class="hljs-comment">// Hash provided code</span>
+    <span class="hljs-keyword">const</span> codeHash = crypto.<span class="hljs-title function_">createHash</span>(<span class="hljs-string">&#x27;sha256&#x27;</span>).<span class="hljs-title function_">update</span>(code).<span class="hljs-title function_">digest</span>(<span class="hljs-string">&#x27;hex&#x27;</span>);
+
+    <span class="hljs-comment">// Query for matching invite</span>
+    <span class="hljs-keyword">const</span> invitesQuery = <span class="hljs-keyword">await</span> admin.<span class="hljs-title function_">firestore</span>()
+      .<span class="hljs-title function_">collectionGroup</span>(<span class="hljs-string">&#x27;invites&#x27;</span>)
+      .<span class="hljs-title function_">where</span>(<span class="hljs-string">&#x27;codeHash&#x27;</span>, <span class="hljs-string">&#x27;==&#x27;</span>, codeHash)
+      .<span class="hljs-title function_">where</span>(<span class="hljs-string">&#x27;consumedAt&#x27;</span>, <span class="hljs-string">&#x27;==&#x27;</span>, <span class="hljs-literal">null</span>)
+      .<span class="hljs-title function_">limit</span>(<span class="hljs-number">1</span>)
+      .<span class="hljs-title function_">get</span>();
+
+    <span class="hljs-keyword">if</span> (invitesQuery.<span class="hljs-property">empty</span>) {
+      <span class="hljs-keyword">throw</span> <span class="hljs-keyword">new</span> functions.<span class="hljs-property">https</span>.<span class="hljs-title class_">HttpsError</span>(<span class="hljs-string">&#x27;not-found&#x27;</span>, <span class="hljs-string">&#x27;Invalid or expired invitation&#x27;</span>);
+    }
+
+    <span class="hljs-keyword">const</span> inviteDoc = invitesQuery.<span class="hljs-property">docs</span>[<span class="hljs-number">0</span>];
+    <span class="hljs-keyword">const</span> inviteData = inviteDoc.<span class="hljs-title function_">data</span>();
+    <span class="hljs-keyword">const</span> tenantId = inviteData.<span class="hljs-property">tenantId</span>;
+
+    <span class="hljs-comment">// Validate expiration</span>
+    <span class="hljs-keyword">if</span> (inviteData.<span class="hljs-property">expiresAt</span>.<span class="hljs-title function_">toDate</span>() &lt; <span class="hljs-keyword">new</span> <span class="hljs-title class_">Date</span>()) {
+      <span class="hljs-keyword">throw</span> <span class="hljs-keyword">new</span> functions.<span class="hljs-property">https</span>.<span class="hljs-title class_">HttpsError</span>(<span class="hljs-string">&#x27;failed-precondition&#x27;</span>, <span class="hljs-string">&#x27;Invitation has expired&#x27;</span>);
+    }
+
+    <span class="hljs-comment">// Validate email binding (if set)</span>
+    <span class="hljs-keyword">if</span> (inviteData.<span class="hljs-property">email</span> &amp;&amp; inviteData.<span class="hljs-property">email</span> !== userEmail) {
+      <span class="hljs-keyword">throw</span> <span class="hljs-keyword">new</span> functions.<span class="hljs-property">https</span>.<span class="hljs-title class_">HttpsError</span>(<span class="hljs-string">&#x27;permission-denied&#x27;</span>, <span class="hljs-string">&#x27;Invitation is for a different email&#x27;</span>);
+    }
+
+    <span class="hljs-comment">// Check if user is already a member</span>
+    <span class="hljs-keyword">const</span> existingMember = <span class="hljs-keyword">await</span> admin.<span class="hljs-title function_">firestore</span>()
+      .<span class="hljs-title function_">doc</span>(<span class="hljs-string">`tenants/<span class="hljs-subst">${tenantId}</span>/members/<span class="hljs-subst">${uid}</span>`</span>)
+      .<span class="hljs-title function_">get</span>();
+
+    <span class="hljs-keyword">if</span> (existingMember.<span class="hljs-property">exists</span>) {
+      <span class="hljs-keyword">throw</span> <span class="hljs-keyword">new</span> functions.<span class="hljs-property">https</span>.<span class="hljs-title class_">HttpsError</span>(<span class="hljs-string">&#x27;already-exists&#x27;</span>, <span class="hljs-string">&#x27;You are already a member of this team&#x27;</span>);
+    }
+
+    <span class="hljs-comment">// Atomic transaction to create memberships</span>
+    <span class="hljs-keyword">await</span> admin.<span class="hljs-title function_">firestore</span>().<span class="hljs-title function_">runTransaction</span>(<span class="hljs-keyword">async</span> (transaction) =&gt; {
+      <span class="hljs-comment">// Allocate memberNumber</span>
+      <span class="hljs-keyword">const</span> memberNumber = <span class="hljs-keyword">await</span> <span class="hljs-title function_">allocateSequence</span>(transaction, tenantId, <span class="hljs-string">&#x27;memberNumber&#x27;</span>);
+
+      <span class="hljs-comment">// Allocate teamMemberNumber</span>
+      <span class="hljs-keyword">const</span> teamMemberNumber = <span class="hljs-keyword">await</span> <span class="hljs-title function_">allocateSequence</span>(transaction, tenantId, <span class="hljs-string">&#x27;teamMemberNumber&#x27;</span>);
+
+      <span class="hljs-comment">// Create member document</span>
+      <span class="hljs-keyword">const</span> memberRef = admin.<span class="hljs-title function_">firestore</span>().<span class="hljs-title function_">doc</span>(<span class="hljs-string">`tenants/<span class="hljs-subst">${tenantId}</span>/members/<span class="hljs-subst">${uid}</span>`</span>);
+      transaction.<span class="hljs-title function_">set</span>(memberRef, {
+        tenantId,
+        memberNumber,
+        displayName,
+        <span class="hljs-attr">email</span>: userEmail,
+        <span class="hljs-attr">role</span>: inviteData.<span class="hljs-property">presetRole</span>,
+        <span class="hljs-attr">status</span>: <span class="hljs-string">&#x27;active&#x27;</span>,
+        <span class="hljs-attr">lastSeenAt</span>: <span class="hljs-literal">null</span>,
+        <span class="hljs-attr">createdAt</span>: admin.<span class="hljs-property">firestore</span>.<span class="hljs-property">FieldValue</span>.<span class="hljs-title function_">serverTimestamp</span>(),
+        <span class="hljs-attr">updatedAt</span>: admin.<span class="hljs-property">firestore</span>.<span class="hljs-property">FieldValue</span>.<span class="hljs-title function_">serverTimestamp</span>()
+      });
+
+      <span class="hljs-comment">// Create user-tenant mapping</span>
+      <span class="hljs-keyword">const</span> mappingRef = admin.<span class="hljs-title function_">firestore</span>().<span class="hljs-title function_">doc</span>(<span class="hljs-string">`user_tenants/<span class="hljs-subst">${uid}</span>/memberships/<span class="hljs-subst">${tenantId}</span>`</span>);
+      transaction.<span class="hljs-title function_">set</span>(mappingRef, {
+        tenantId,
+        <span class="hljs-attr">role</span>: inviteData.<span class="hljs-property">presetRole</span>,
+        <span class="hljs-attr">createdAt</span>: admin.<span class="hljs-property">firestore</span>.<span class="hljs-property">FieldValue</span>.<span class="hljs-title function_">serverTimestamp</span>(),
+        <span class="hljs-attr">updatedAt</span>: admin.<span class="hljs-property">firestore</span>.<span class="hljs-property">FieldValue</span>.<span class="hljs-title function_">serverTimestamp</span>()
+      });
+
+      <span class="hljs-comment">// Create team member resource</span>
+      <span class="hljs-keyword">const</span> teamMemberRef = admin.<span class="hljs-title function_">firestore</span>()
+        .<span class="hljs-title function_">collection</span>(<span class="hljs-string">`tenants/<span class="hljs-subst">${tenantId}</span>/teamMembers`</span>)
+        .<span class="hljs-title function_">doc</span>();
+      transaction.<span class="hljs-title function_">set</span>(teamMemberRef, {
+        tenantId,
+        teamMemberNumber,
+        <span class="hljs-attr">name</span>: displayName,
+        <span class="hljs-attr">hourlyRate</span>: <span class="hljs-number">0</span>,
+        <span class="hljs-attr">authUserId</span>: uid,
+        <span class="hljs-attr">createdBy</span>: inviteData.<span class="hljs-property">createdBy</span>,
+        <span class="hljs-attr">createdAt</span>: admin.<span class="hljs-property">firestore</span>.<span class="hljs-property">FieldValue</span>.<span class="hljs-title function_">serverTimestamp</span>(),
+        <span class="hljs-attr">updatedBy</span>: inviteData.<span class="hljs-property">createdBy</span>,
+        <span class="hljs-attr">updatedAt</span>: admin.<span class="hljs-property">firestore</span>.<span class="hljs-property">FieldValue</span>.<span class="hljs-title function_">serverTimestamp</span>()
+      });
+
+      <span class="hljs-comment">// Mark invite as consumed</span>
+      transaction.<span class="hljs-title function_">update</span>(inviteDoc.<span class="hljs-property">ref</span>, {
+        <span class="hljs-attr">consumedAt</span>: admin.<span class="hljs-property">firestore</span>.<span class="hljs-property">FieldValue</span>.<span class="hljs-title function_">serverTimestamp</span>(),
+        <span class="hljs-attr">updatedAt</span>: admin.<span class="hljs-property">firestore</span>.<span class="hljs-property">FieldValue</span>.<span class="hljs-title function_">serverTimestamp</span>()
+      });
+    });
+
+    <span class="hljs-comment">// Set custom claim for tenant</span>
+    <span class="hljs-keyword">await</span> admin.<span class="hljs-title function_">auth</span>().<span class="hljs-title function_">setCustomUserClaims</span>(uid, {
+      <span class="hljs-attr">tenant_id</span>: tenantId
+    });
+
+    <span class="hljs-keyword">return</span> {
+      <span class="hljs-attr">success</span>: <span class="hljs-literal">true</span>,
+      tenantId,
+      <span class="hljs-attr">role</span>: inviteData.<span class="hljs-property">presetRole</span>
+    };
+  });
+</code></pre>
+<h2 data-line="625" class="code-line" dir="auto" id="10-summary-key-database-collections-in-invitation-flow">10. Summary: Key Database Collections in Invitation Flow</h2>
+<table data-line="627" class="code-line" dir="auto">
+<thead data-line="627" class="code-line" dir="auto">
+<tr data-line="627" class="code-line" dir="auto">
+<th>Collection</th>
+<th>Action</th>
+<th>When</th>
+<th>Data Stored</th>
+</tr>
+</thead>
+<tbody data-line="629" class="code-line" dir="auto">
+<tr data-line="629" class="code-line" dir="auto">
+<td><code>&quot;/tenants/{tid}/invites/{id}&quot;</code></td>
+<td><strong>CREATE</strong></td>
+<td>Owner creates invite</td>
+<td>codeHash, expiresAt, presetRole, createdBy, email?</td>
+</tr>
+<tr data-line="630" class="code-line" dir="auto">
+<td><code>&quot;/tenants/{tid}/invites/{id}&quot;</code></td>
+<td><strong>UPDATE</strong></td>
+<td>Member redeems invite</td>
+<td>consumedAt = now</td>
+</tr>
+<tr data-line="631" class="code-line" dir="auto">
+<td><code>/sequences/{tid}/counters/memberNumber</code></td>
+<td><strong>INCREMENT</strong></td>
+<td>During redemption</td>
+<td>currentValue++</td>
+</tr>
+<tr data-line="632" class="code-line" dir="auto">
+<td><code>/sequences/{tid}/counters/teamMemberNumber</code></td>
+<td><strong>INCREMENT</strong></td>
+<td>During redemption</td>
+<td>currentValue++</td>
+</tr>
+<tr data-line="633" class="code-line" dir="auto">
+<td><code>/tenants/{tid}/members/{uid}</code></td>
+<td><strong>CREATE</strong></td>
+<td>Member redeems invite</td>
+<td>memberNumber, role, status, displayName, email</td>
+</tr>
+<tr data-line="634" class="code-line" dir="auto">
+<td><code>/user_tenants/{uid}/memberships/{tid}</code></td>
+<td><strong>CREATE</strong></td>
+<td>Member redeems invite</td>
+<td>tenantId, role</td>
+</tr>
+<tr data-line="635" class="code-line" dir="auto">
+<td><code>/tenants/{tid}/teamMembers/{id}</code></td>
+<td><strong>CREATE</strong></td>
+<td>Member redeems invite</td>
+<td>teamMemberNumber, name, hourlyRate, authUserId</td>
+</tr>
+<tr data-line="636" class="code-line" dir="auto">
+<td><code>/tenants/{tid}/audit_logs/{id}</code></td>
+<td><strong>CREATE</strong></td>
+<td>After each operation</td>
+<td>operation, collection, documentId, author, before/after</td>
+</tr>
+</tbody>
+</table>
+<h3 data-line="638" class="code-line" dir="auto" id="total-database-operations-per-redemption-8-writes">Total Database Operations Per Redemption: 8 writes</h3>
+<ol data-line="640" class="code-line" dir="auto">
+<li data-line="640" class="code-line" dir="auto">Read invite document (validate)</li>
+<li data-line="641" class="code-line" dir="auto">Increment memberNumber counter</li>
+<li data-line="642" class="code-line" dir="auto">Increment teamMemberNumber counter</li>
+<li data-line="643" class="code-line" dir="auto">Create member document</li>
+<li data-line="644" class="code-line" dir="auto">Create user-tenant mapping</li>
+<li data-line="645" class="code-line" dir="auto">Create team member resource</li>
+<li data-line="646" class="code-line" dir="auto">Update invite (set consumedAt)</li>
+<li data-line="647" class="code-line" dir="auto">Audit log entries (automatic triggers)</li>
+</ol>
+<div class="code-line" data-line="649"></div></div>
+<script async
+				src="file:///c%3A/Users/bs/.vscode/extensions/mermaidchart.vscode-mermaid-chart-2.5.3/dist-preview/bundle.js"
+				nonce="lRLKqMImbyAPwuRioWfsLyg1ip816KQZqDOzszFYOp1UDqzoMJD8OPv6j3V7zgOQ"
+				charset="UTF-8"></script>
+			</body>
+			</html>

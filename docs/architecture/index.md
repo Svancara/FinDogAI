@@ -10,6 +10,11 @@ This folder contains the complete technical architecture documentation for FinDo
 - [Data Models](./data-models.md) - Entity definitions, schemas, and relationships
 - [API Specification](./api-specification.md) - Firestore patterns, Cloud Functions, and triggers
 
+### System Design
+- [Security](./security.md) - Authentication, authorization, multi-tenant isolation, and security best practices
+- [Voice Architecture](./voice-architecture.md) - Complete voice pipeline, online/offline modes, STT/LLM/TTS integration
+- [Monitoring](./monitoring.md) - Observability stack, metrics, logging, alerting, and dashboards
+
 ### Implementation Details
 - [Components](./components.md) - Frontend, backend, and shared component architecture
 - [Project Structure](./project-structure.md) - Monorepo organization and file layout
