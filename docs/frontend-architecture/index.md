@@ -94,7 +94,14 @@ This documentation provides comprehensive guidance for the FinDogAI frontend arc
     - PWA optimization strategies
     - Lazy loading and code splitting
 
-11. **[Deployment Configuration](./deployment-configuration.md)**
+11. **[Performance Monitoring](./performance-monitoring.md)**
+    - Offline-first monitoring architecture
+    - Metrics collection and sampling strategy
+    - Cloud ingestion and BigQuery analysis
+    - Privacy-preserving telemetry
+    - Alerting and dashboards
+
+12. **[Deployment Configuration](./deployment-configuration.md)**
     - Environment configuration
     - Build configuration
     - Capacitor setup
