@@ -13,10 +13,12 @@ This folder contains the complete technical architecture documentation for FinDo
 ### System Design
 - [Security](./security.md) - Authentication, authorization, multi-tenant isolation, and security best practices
 - [Voice Architecture](./voice-architecture.md) - Complete voice pipeline, online/offline modes, STT/LLM/TTS integration
+- [Third-Party Integrations](./third-party-integrations.md) - Voice APIs (STT/LLM/TTS), Stripe payments, OAuth providers, rate limiting, and quota management
 - [Monitoring](./monitoring.md) - Observability stack, metrics, logging, alerting, and dashboards
 
 ### Implementation Details
 - [Components](./components.md) - Frontend, backend, and shared component architecture
+- [Frontend Integration Services](./frontend-integration-services.md) - Angular services for voice, payments, and auth with NgRx state management
 - [Project Structure](./project-structure.md) - Monorepo organization and file layout
 - [Development Workflow](./development-workflow.md) - Setup instructions and development commands
 - [Deployment](./deployment.md) - CI/CD pipeline and deployment strategy
