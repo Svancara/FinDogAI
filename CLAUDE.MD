@@ -30,6 +30,7 @@ These are project-agnostic rules that govern **how** code changes should be made
 - **[.claude_rules/code-comments.md](.claude_rules/code-comments.md)** - Comment standards and file documentation requirements
 - **[.claude_rules/NgRx-Usage.md](.claude_rules/NgRx-Usage.md)** - Mandatory NgRx patterns for Angular state management
 - **[.claude_rules/testing.md](.claude_rules/testing.md)** - TDD practices, test coverage, and quality standards
+- **[.claude_rules/markdown-formatting.md](.claude_rules/markdown-formatting.md)** - Markdown formatting standards (MD022, MD026, MD029, MD032, MD040, MD036)
 
 These are FinDogAI-specific implementation standards.
 
