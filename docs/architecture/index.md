@@ -13,6 +13,8 @@ This folder contains the complete technical architecture documentation for FinDo
 ### System Design
 - [Security](./security.md) - Authentication, authorization, multi-tenant isolation, and security best practices
 - [Voice Architecture](./voice-architecture.md) - Complete voice pipeline, online/offline modes, STT/LLM/TTS integration
+- [Voice Pipeline Implementation](./voice-pipeline-implementation.md) - **NEW:** Detailed sequence diagrams, error handling (FR21), latency optimization (NFR1/NFR2), and quality monitoring (NFR5/NFR6)
+- [Performance & Quality Monitoring](./performance-monitoring-architecture.md) - **NEW:** NFR compliance monitoring, rate limiting, infrastructure sizing, and alerting strategy
 - [Third-Party Integrations](./third-party-integrations.md) - Voice APIs (STT/LLM/TTS), Stripe payments, OAuth providers, rate limiting, and quota management
 - [Monitoring](./monitoring.md) - Observability stack, metrics, logging, alerting, and dashboards
 
@@ -30,6 +32,10 @@ This folder contains the complete technical architecture documentation for FinDo
 ### Feature-Specific Guides
 - [Business Profile Migration](./business-profile-migration.md) - Migration guide for resource visibility feature
 - [Business Profile Implementation Checklist](./business-profile-implementation-checklist.md) - Developer implementation roadmap
+
+### Architecture Validation
+- [Architecture Checklist](../ARCHITECTURE_CHECKLIST.md) - Comprehensive validation report with NFR compliance assessment
+- [Architecture Gaps Resolved](./ARCHITECTURE_GAPS_RESOLVED.md) - **NEW:** Summary of addressed gaps from section 1.2 (NFR alignment)
 
 ## 🎯 Quick Navigation
 
