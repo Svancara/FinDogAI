@@ -23,6 +23,7 @@ This folder contains the complete technical architecture documentation for FinDo
 
 ### Standards & Guidelines
 - [Coding Standards](./coding-standards.md) - Critical rules, naming conventions, and best practices
+- [Testing Strategy](./testing-strategy.md) - Comprehensive testing approach covering unit, integration, E2E, performance, security, accessibility, and visual regression testing
 
 ### Feature-Specific Guides
 - [Business Profile Migration](./business-profile-migration.md) - Migration guide for resource visibility feature
@@ -34,13 +35,16 @@ This folder contains the complete technical architecture documentation for FinDo
 Start with [Data Models](./data-models.md) and [API Specification](./api-specification.md) to understand the system structure.
 
 ### For Frontend Developers
-Focus on [Components](./components.md), [Tech Stack](./tech-stack.md), and [Coding Standards](./coding-standards.md).
+Focus on [Components](./components.md), [Tech Stack](./tech-stack.md), [Coding Standards](./coding-standards.md), and [Testing Strategy](./testing-strategy.md).
 
 ### For Backend Developers
-Prioritize [API Specification](./api-specification.md), [Data Models](./data-models.md), and [Deployment](./deployment.md).
+Prioritize [API Specification](./api-specification.md), [Data Models](./data-models.md), [Testing Strategy](./testing-strategy.md), and [Deployment](./deployment.md).
 
 ### For DevOps Engineers
-See [Deployment](./deployment.md), [Project Structure](./project-structure.md), and [Development Workflow](./development-workflow.md).
+See [Deployment](./deployment.md), [Testing Strategy](./testing-strategy.md), [Project Structure](./project-structure.md), and [Development Workflow](./development-workflow.md).
+
+### For QA Engineers
+Start with [Testing Strategy](./testing-strategy.md), then review [Tech Stack](./tech-stack.md) and [Deployment](./deployment.md) for CI/CD integration.
 
 ## 📋 Related Documentation
 
