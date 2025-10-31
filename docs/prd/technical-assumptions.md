@@ -73,7 +73,7 @@
 
 **NOT in MVP:**
 - Performance/load testing (not needed for <100 users)
-- Accessibility automated testing (WCAG compliance via manual audit)
+- Accessibility automated testing (no formal WCAG compliance target)
 - Security penetration testing (post-beta, pre-launch milestone)
 
 ### Additional Technical Assumptions and Requests

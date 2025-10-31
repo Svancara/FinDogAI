@@ -135,7 +135,7 @@ nx build mobile-app --configuration=production
 - All code reviewed before merging
 
 ### Accessibility
-- WCAG 2.1 Level AA compliance
+- No formal WCAG compliance target
 - Touch targets minimum 48x48px
 - Screen reader support
 - Keyboard navigation

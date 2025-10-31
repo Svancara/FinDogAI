@@ -452,7 +452,7 @@ Use semantic color variables:
 ## Accessibility Considerations
 
 ### 1. Color Contrast
-Ensure WCAG AA compliance:
+Maintain good contrast ratios for readability:
 
 ```scss
 // Check contrast ratios

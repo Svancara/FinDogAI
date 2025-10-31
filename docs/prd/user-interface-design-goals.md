@@ -35,10 +35,10 @@ FinDogAI prioritizes a **voice-first, eyes-free interaction model** optimized fo
 
 7. **Voice Confirmation Modal:** Full-screen overlay during voice interaction showing real-time transcription, parsed entities in structured format, and Accept/Retry/Cancel actions. TTS readback plays confirmation prompt ending with "Say 'yes' to confirm or 'no' to retry." Wake-word detection remains active to capture voice responses ("yes" = Accept, "no" = Retry). Touch buttons remain enabled as fallback. Modal is non-dismissible during TTS playback to prevent accidental interruption.
 
-### Accessibility: WCAG AA
+### Accessibility: None
 
-- Target WCAG 2.1 Level AA compliance for MVP
-- High contrast color ratios (4.5:1 minimum for text)
+- No formal WCAG compliance target for MVP
+- High contrast color ratios for readability
 - Screen reader support for visual feedback during voice flows (announce "Job 123 set as active")
 - TTS readback serves as primary accessibility feature for vision-impaired users
 - Large text mode support (iOS/Android system settings)
