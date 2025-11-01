@@ -21,6 +21,7 @@ findogai/
 │   │   │   │   ├── shared/         # Shared components
 │   │   │   │   └── state/          # NgRx store
 │   │   │   ├── assets/             # Static assets
+│   │   │   │   └── i18n/           # Translation files (en.json, cs.json)
 │   │   │   ├── environments/       # Environment configs
 │   │   │   └── theme/              # Ionic theming
 │   │   ├── capacitor.config.ts     # Native app config
@@ -74,10 +75,11 @@ findogai/
 
 ### `/apps/mobile-app/`
 The main Progressive Web Application built with Angular and Ionic. Contains all frontend code including:
-- **Core**: Singleton services (auth, config, error handling)
+- **Core**: Singleton services (auth, config, error handling, language service)
 - **Features**: Feature modules organized by domain (jobs, costs, resources, voice)
-- **Shared**: Reusable UI components and utilities
+- **Shared**: Reusable UI components and utilities (including language selector)
 - **State**: NgRx store configuration and state management
+- **Assets/i18n**: Translation JSON files (en.json, cs.json) for multi-language support
 - **Environments**: Environment-specific configuration files
 
 ### `/apps/functions/`

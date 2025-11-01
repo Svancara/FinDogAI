@@ -4,7 +4,7 @@
 
 ## Technical Summary
 
-FinDogAI employs a **hybrid client-heavy architecture with serverless backend**, deployed as a Progressive Web App with native mobile capabilities via Capacitor. The Angular 20+/Ionic 8+ frontend directly interfaces with Firestore for offline-first data persistence, while Cloud Functions handle server-side operations like audit logging, sequence generation, and PDF creation. The voice pipeline orchestration runs client-side with **configurable online/offline modes** - online mode uses external STT/LLM/TTS services for best quality, while offline mode falls back to device capabilities or cached responses. Infrastructure leverages Firebase's managed services in europe-west1 for GDPR compliance, with automatic scaling from 0 to thousands of concurrent users. This architecture achieves the PRD goals through strategic online/offline trade-offs while maintaining cost efficiency.
+FinDogAI employs a **hybrid client-heavy architecture with serverless backend**, deployed as a Progressive Web App with native mobile capabilities via Capacitor. The Angular 20+/Ionic 8+ frontend directly interfaces with Firestore for offline-first data persistence, while Cloud Functions handle server-side operations like audit logging, sequence generation, and PDF creation. The voice pipeline orchestration runs client-side with **configurable online/offline modes** - online mode uses external STT/LLM/TTS services for best quality, while offline mode falls back to device capabilities or cached responses. The application is **internationalization-ready** with ngx-translate providing offline-capable multi-language support (MVP: English and Czech, designed for Phase 2 expansion). Infrastructure leverages Firebase's managed services in europe-west1 for GDPR compliance, with automatic scaling from 0 to thousands of concurrent users. This architecture achieves the PRD goals through strategic online/offline trade-offs while maintaining cost efficiency.
 
 ## Platform and Infrastructure Choice
 
@@ -95,6 +95,7 @@ graph TB
 - **Signed URL Pattern:** Secure file access without permanent links - *Dependencies: Cloud Storage SDK*
 - **Optimistic UI Updates:** Immediate UI feedback with eventual consistency - *Dependencies: Firestore latency compensation*
 - **Circuit Breaker Pattern:** Fallback for external service failures - *Dependencies: Resilience libraries*
+- **Internationalization Pattern:** Lazy-loaded translations with offline caching - *Dependencies: ngx-translate, Service Worker*
 
 ## Dependency Management Strategy
 

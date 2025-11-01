@@ -683,6 +683,171 @@ export class SomeFeatureComponent {
 }
 ```
 
+## Internationalization in Components
+
+All components MUST use translation keys for user-facing text. Never hardcode strings in templates or component logic.
+
+### Import TranslateModule
+
+```typescript
+@Component({
+  selector: 'app-example',
+  standalone: true,
+  imports: [CommonModule, IonicModule, TranslateModule], // Always include TranslateModule
+  template: `...`
+})
+export class ExampleComponent { }
+```
+
+### Use TranslatePipe in Templates
+
+```typescript
+@Component({
+  selector: 'app-job-list',
+  template: `
+    <!-- ✅ GOOD: Use translate pipe -->
+    <ion-header>
+      <ion-toolbar>
+        <ion-title>{{ 'jobs.list.title' | translate }}</ion-title>
+      </ion-toolbar>
+    </ion-header>
+
+    <ion-button>
+      <ion-icon slot="start" name="add"></ion-icon>
+      {{ 'jobs.list.createButton' | translate }}
+    </ion-button>
+
+    <!-- With parameters -->
+    <h2>{{ 'jobs.detail.jobNumber' | translate: {number: job().jobNumber} }}</h2>
+
+    <!-- Status badges with translation -->
+    @switch (job().status) {
+      @case ('draft') {
+        <ion-badge>{{ 'jobs.status.draft' | translate }}</ion-badge>
+      }
+      @case ('active') {
+        <ion-badge color="primary">{{ 'jobs.status.active' | translate }}</ion-badge>
+      }
+      @case ('completed') {
+        <ion-badge color="success">{{ 'jobs.status.completed' | translate }}</ion-badge>
+      }
+    }
+
+    <!-- ❌ BAD: Hardcoded strings -->
+    <ion-title>Job List</ion-title>
+    <ion-button>Create Job</ion-button>
+  `
+})
+```
+
+### Use TranslateService in Component Logic
+
+```typescript
+export class JobFormComponent {
+  private readonly translate = inject(TranslateService);
+  private readonly toastController = inject(ToastController);
+
+  async saveJob(): Promise<void> {
+    try {
+      await this.jobsService.save(this.job);
+
+      // ✅ GOOD: Translate toast messages
+      const message = this.translate.instant('jobs.form.saveSuccess');
+      await this.showToast(message, 'success');
+    } catch (error) {
+      // ✅ GOOD: Translate error messages
+      const message = this.translate.instant('jobs.form.errorSaveFailed');
+      await this.showToast(message, 'danger');
+    }
+  }
+
+  async showConfirmDialog(): Promise<boolean> {
+    const alert = await this.alertController.create({
+      header: this.translate.instant('jobs.delete.confirmTitle'),
+      message: this.translate.instant('jobs.delete.confirmMessage'),
+      buttons: [
+        {
+          text: this.translate.instant('common.buttons.cancel'),
+          role: 'cancel'
+        },
+        {
+          text: this.translate.instant('common.buttons.delete'),
+          role: 'destructive'
+        }
+      ]
+    });
+
+    await alert.present();
+    const { role } = await alert.onDidDismiss();
+    return role === 'destructive';
+  }
+}
+```
+
+### Language Selector Integration
+
+```typescript
+@Component({
+  selector: 'app-settings',
+  template: `
+    <ion-list>
+      <ion-item>
+        <ion-label>{{ 'settings.language' | translate }}</ion-label>
+        <app-language-selector></app-language-selector>
+      </ion-item>
+    </ion-list>
+  `
+})
+export class SettingsComponent {
+  // Language selector handles language switching
+}
+```
+
+### Empty States and Placeholders
+
+```typescript
+template: `
+  @if (jobs().length === 0) {
+    <div class="empty-state">
+      <ion-icon name="briefcase-outline"></ion-icon>
+      <h3>{{ 'jobs.list.emptyTitle' | translate }}</h3>
+      <p>{{ 'jobs.list.emptyMessage' | translate }}</p>
+      <ion-button (click)="createJob()">
+        {{ 'jobs.list.createFirstJob' | translate }}
+      </ion-button>
+    </div>
+  }
+`
+```
+
+### Form Labels and Validation Messages
+
+```typescript
+template: `
+  <form [formGroup]="jobForm">
+    <ion-item>
+      <ion-label position="floating">
+        {{ 'jobs.form.titleLabel' | translate }}
+      </ion-label>
+      <ion-input formControlName="title" type="text"></ion-input>
+    </ion-item>
+
+    @if (jobForm.get('title')?.hasError('required') && jobForm.get('title')?.touched) {
+      <div class="error-message">
+        {{ 'jobs.form.errorTitleRequired' | translate }}
+      </div>
+    }
+
+    <ion-item>
+      <ion-label position="floating">
+        {{ 'jobs.form.budgetLabel' | translate }}
+      </ion-label>
+      <ion-input formControlName="budget" type="number"></ion-input>
+    </ion-item>
+  </form>
+`
+```
+
 ## Component Checklist
 
 Before committing a component, ensure:
@@ -693,6 +858,8 @@ Before committing a component, ensure:
 - [ ] `takeUntilDestroyed()` for subscriptions
 - [ ] Type-safe inputs and outputs
 - [ ] Angular 20+ control flow syntax
+- [ ] **TranslateModule imported and all UI text uses translation keys**
+- [ ] **No hardcoded strings in templates or component logic**
 - [ ] Proper error handling
 - [ ] Loading and empty states
 - [ ] Accessible (ARIA labels, keyboard nav)

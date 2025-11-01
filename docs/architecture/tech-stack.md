@@ -11,6 +11,7 @@ This is the **DEFINITIVE** technology selection for the entire FinDogAI project.
 | Frontend Language | **TypeScript** | 5.3+ | Type-safe development | Shared types across fullstack, better IDE support, reduced runtime errors |
 | Frontend Framework | **Angular** | 20+ | Core application framework | Latest with signals for reactivity, standalone components, excellent PWA support |
 | UI Component Library | **Ionic Framework** | 8+ | Mobile-optimized UI | Native-feel components, platform-adaptive styling, touch-optimized |
+| Internationalization | **ngx-translate** | 15+ | Multi-language support | Lazy-loaded translations, offline caching, interpolation support |
 | State Management | **NgRx** | 18+ | Application state | Enterprise-grade with devtools, perfect for complex voice flows |
 | Backend Language | **TypeScript** | 5.3+ | Cloud Functions development | Type sharing with frontend, async/await support |
 | Backend Framework | **Firebase Functions** | 5+ (2nd Gen) | Serverless compute | Auto-scaling, integrated with Firestore triggers, cost-effective |
@@ -31,6 +32,15 @@ This is the **DEFINITIVE** technology selection for the entire FinDogAI project.
 | CSS Framework | **Ionic CSS Variables + SCSS** | 8+ / Latest | Styling and theming | CSS custom properties for runtime theming, SCSS for development |
 
 ## Additional Technology Specifications
+
+### Internationalization (i18n) Technologies
+- **Core Library:** @ngx-translate/core 15+
+- **HTTP Loader:** @ngx-translate/http-loader 8+
+- **Supported Languages (MVP):** English (en), Czech (cs)
+- **Translation Storage:** `public/i18n/{lang}.json` files
+- **Fallback Language:** English (en)
+- **Offline Support:** Service Worker caches translation files
+- **Future Expansion:** Designed for Phase 2 multi-language support
 
 ### Voice Pipeline Technologies
 - **STT Online:** Web Speech API (primary), Google Cloud Speech-to-Text (fallback)

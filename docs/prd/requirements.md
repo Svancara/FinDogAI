@@ -37,7 +37,7 @@
 
 **FR14 (Phase 2):** The system shall generate basic PDF reports for jobs showing: job title, cost breakdown by category, sum of advances, net balance, with email option via device's default mail client. This functionality is out of scope for MVP and will be delivered in Phase 2.
 
-**FR15:** The system shall support Czech and English UI localization and voice recognition, with user-selectable language preference (Czech default).
+**FR15:** The system shall support Czech and English UI localization and voice recognition, with user-selectable language preference. **MVP Scope**: English and Czech only. All UI text must be externalized using ngx-translate with translation keys stored in `assets/i18n/{lang}.json` files. Translation files are cached offline by the Service Worker for full offline language support. **Phase 2**: Additional language support as needed.
 
 **FR16:** The system shall use on-device Keyword Spotting (KWS) for optional wake-word activation to enable hands-free voice flow initiation.
 

@@ -17,6 +17,7 @@ These MINIMAL but CRITICAL standards prevent common mistakes in AI-driven develo
 - **Voice Commands:** Always provide visual feedback for voice interactions (loading, success, error states)
 - **Audit Trail:** Never bypass audit metadata (createdBy, updatedBy) when modifying data
 - **Template Syntax:** Use `@if`, `@for`, `@switch` control flow (Angular 17+) instead of `*ngIf`, `*ngFor`, `*ngSwitch`
+- **Internationalization (i18n):** ALL user-facing text MUST use translation keys via TranslateService/TranslatePipe - never hardcode UI strings
 
 ## Naming Conventions
 
@@ -567,6 +568,326 @@ class JobsService {
 list(tenantId: string): Observable<Job[]> {  // Don't trust user input!
   return collectionData(collection(this.db, `tenants/${tenantId}/jobs`));
 }
+```
+
+## Internationalization (i18n) Standards
+
+### Language Support Strategy
+
+- **MVP Scope**: English (en) and Czech (cs) only
+- **Phase 2 Goal**: Multiple languages
+- **Critical Requirement**: ALL UI text must be externalized and translation-ready from day one
+
+### i18n Library Configuration
+
+**Library**: `@ngx-translate/core` with `@ngx-translate/http-loader`
+**Translation Files**: `public/i18n/{lang}.json` (e.g., en.json, cs.json)
+**Fallback Language**: English (`en`)
+**Caching**: Service Worker caches translation files for offline access
+
+### Translation File Structure
+
+```json
+{
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "retry": "Retry"
+  },
+  "auth": {
+    "signIn": "Sign In",
+    "signOut": "Sign Out",
+    "email": "Email",
+    "password": "Password",
+    "errorInvalidCredentials": "Invalid email or password"
+  },
+  "jobs": {
+    "title": "Jobs",
+    "createJob": "Create Job",
+    "jobNumber": "Job #{{number}}",
+    "status": {
+      "draft": "Draft",
+      "active": "Active",
+      "completed": "Completed"
+    }
+  }
+}
+```
+
+### Translation Key Naming Convention
+
+- Use **dot notation** for hierarchical organization
+- Group by **feature domain** (auth, jobs, costs, resources, etc.)
+- Use **camelCase** for key names
+- Prefix error messages with `error`
+- Use `common.*` for shared UI elements
+
+**Pattern**: `{domain}.{feature}.{context}`
+
+Examples:
+- `jobs.list.title` → "Job List"
+- `costs.form.amountLabel` → "Amount"
+- `auth.errors.errorInvalidEmail` → "Invalid email format"
+- `common.buttons.save` → "Save"
+
+### Template Usage - TranslatePipe
+
+```typescript
+// ✅ GOOD: Use translate pipe in templates
+template: `
+  <ion-header>
+    <ion-toolbar>
+      <ion-title>{{ 'jobs.list.title' | translate }}</ion-title>
+    </ion-toolbar>
+  </ion-header>
+
+  <ion-button>{{ 'common.buttons.save' | translate }}</ion-button>
+
+  <!-- With interpolation parameters -->
+  <h2>{{ 'jobs.detail.jobNumber' | translate: {number: job.jobNumber} }}</h2>
+
+  <!-- Pluralization -->
+  <p>{{ 'jobs.list.itemCount' | translate: {count: jobs.length} }}</p>
+`
+
+// ❌ BAD: Hardcoded strings
+template: `
+  <ion-title>Job List</ion-title>
+  <ion-button>Save</ion-button>
+`
+```
+
+### Component Usage - TranslateService
+
+```typescript
+// ✅ GOOD: Use TranslateService for dynamic strings
+export class JobFormComponent {
+  private readonly translate = inject(TranslateService);
+  private readonly toastController = inject(ToastController);
+
+  async saveJob(): Promise<void> {
+    try {
+      await this.jobsService.save(this.job);
+      const message = this.translate.instant('jobs.form.saveSuccess');
+      this.showToast(message, 'success');
+    } catch (error) {
+      const message = this.translate.instant('jobs.form.errorSaveFailed');
+      this.showToast(message, 'danger');
+    }
+  }
+
+  async showToast(message: string, color: string): Promise<void> {
+    const toast = await this.toastController.create({
+      message,
+      duration: 3000,
+      color
+    });
+    await toast.present();
+  }
+}
+
+// ❌ BAD: Hardcoded strings in component logic
+async saveJob(): Promise<void> {
+  this.showToast('Job saved successfully', 'success');
+}
+```
+
+### Language Switching Implementation
+
+```typescript
+// LanguageService - wraps TranslateService with persistence
+@Injectable({
+  providedIn: 'root'
+})
+export class LanguageService {
+  private readonly translate = inject(TranslateService);
+  private readonly langSubject = new BehaviorSubject<string>('en');
+
+  public readonly lang$ = this.langSubject.asObservable();
+
+  constructor() {
+    this.initializeLanguage();
+  }
+
+  private initializeLanguage(): void {
+    // Priority: localStorage > browser language > default 'en'
+    const storedLang = localStorage.getItem('lang');
+    const browserLang = this.translate.getBrowserLang() || 'en';
+    const initialLang = storedLang || (browserLang === 'cs' ? 'cs' : 'en');
+
+    this.setLanguage(initialLang);
+  }
+
+  setLanguage(lang: string): void {
+    this.translate.use(lang);
+    localStorage.setItem('lang', lang);
+    this.langSubject.next(lang);
+  }
+
+  getCurrentLanguage(): string {
+    return this.langSubject.value;
+  }
+}
+```
+
+### Language Selector Component
+
+```typescript
+// ✅ GOOD: Language selector with persistence
+@Component({
+  selector: 'app-language-selector',
+  standalone: true,
+  imports: [IonicModule, CommonModule],
+  template: `
+    <ion-select
+      [value]="currentLang()"
+      (ionChange)="onLanguageChange($event)"
+      interface="popover">
+      <ion-select-option value="en">English</ion-select-option>
+      <ion-select-option value="cs">Čeština</ion-select-option>
+    </ion-select>
+  `
+})
+export class LanguageSelectorComponent {
+  private readonly languageService = inject(LanguageService);
+  protected readonly currentLang = signal<string>('en');
+
+  constructor() {
+    this.languageService.lang$.pipe(
+      takeUntilDestroyed()
+    ).subscribe(lang => this.currentLang.set(lang));
+  }
+
+  protected onLanguageChange(event: CustomEvent): void {
+    this.languageService.setLanguage(event.detail.value);
+  }
+}
+```
+
+### i18n Bootstrap Configuration
+
+```typescript
+// main.ts - configure ngx-translate on app bootstrap
+import { provideHttpClient } from '@angular/common/http';
+import { importProvidersFrom } from '@angular/core';
+import { TranslateModule, TranslateLoader } from '@ngx-translate/core';
+import { TranslateHttpLoader } from '@ngx-translate/http-loader';
+import { HttpClient } from '@angular/common/http';
+
+export function HttpLoaderFactory(http: HttpClient) {
+  return new TranslateHttpLoader(http, './assets/i18n/', '.json');
+}
+
+bootstrapApplication(AppComponent, {
+  providers: [
+    provideHttpClient(),
+    importProvidersFrom(
+      TranslateModule.forRoot({
+        defaultLanguage: 'en',
+        loader: {
+          provide: TranslateLoader,
+          useFactory: HttpLoaderFactory,
+          deps: [HttpClient]
+        }
+      })
+    ),
+    // ... other providers
+  ]
+});
+```
+
+### Offline i18n Considerations
+
+```typescript
+// Service Worker configuration (ngsw-config.json)
+{
+  "assetGroups": [
+    {
+      "name": "i18n",
+      "installMode": "prefetch",
+      "resources": {
+        "files": [
+          "/assets/i18n/*.json"
+        ]
+      }
+    }
+  ]
+}
+```
+
+### i18n Validation
+
+```typescript
+// ✅ GOOD: CI script to validate key consistency
+// scripts/validate-i18n.js
+const fs = require('fs');
+
+const languages = ['en', 'cs'];
+const baseKeys = getKeys(JSON.parse(fs.readFileSync('public/i18n/en.json')));
+
+languages.forEach(lang => {
+  if (lang === 'en') return;
+  const langKeys = getKeys(JSON.parse(fs.readFileSync(`public/i18n/${lang}.json`)));
+  const missing = baseKeys.filter(key => !langKeys.includes(key));
+  if (missing.length > 0) {
+    console.error(`Missing keys in ${lang}.json:`, missing);
+    process.exit(1);
+  }
+});
+
+function getKeys(obj, prefix = '') {
+  let keys = [];
+  for (const [key, value] of Object.entries(obj)) {
+    const fullKey = prefix ? `${prefix}.${key}` : key;
+    if (typeof value === 'object' && value !== null) {
+      keys = keys.concat(getKeys(value, fullKey));
+    } else {
+      keys.push(fullKey);
+    }
+  }
+  return keys;
+}
+```
+
+### i18n Best Practices
+
+1. **Never hardcode UI text** - Use translation keys for all user-facing strings
+2. **Group by feature** - Organize keys by domain (auth, jobs, costs, etc.)
+3. **Use parameters** - For dynamic content: `{{ 'key' | translate: {param: value} }}`
+4. **Validate keys** - Run validation script in CI to catch missing translations
+5. **Fallback gracefully** - Always provide English fallback for missing keys
+6. **Cache translations** - Service Worker must cache i18n JSON files
+7. **Test both languages** - Include Czech translations in E2E tests
+8. **Keep files small** - Split by feature if i18n files become too large (>50KB)
+9. **Use instant() sparingly** - Prefer async pipe in templates over instant() in components
+10. **Document context** - Add comments in translation files for translators
+
+### Common i18n Mistakes to Avoid
+
+```typescript
+// ❌ BAD: String concatenation
+const message = 'You have ' + count + ' items';
+
+// ✅ GOOD: Use interpolation
+const message = this.translate.instant('items.count', { count });
+
+// ❌ BAD: Conditional text in component
+const status = job.isActive ? 'Active' : 'Inactive';
+
+// ✅ GOOD: Translate in template
+@if (job.isActive) {
+  {{ 'jobs.status.active' | translate }}
+} @else {
+  {{ 'jobs.status.inactive' | translate }}
+}
+
+// ❌ BAD: Hardcoded date formats
+const date = new Date().toLocaleDateString('en-US');
+
+// ✅ GOOD: Use Angular date pipe with locale
+{{ date | date: 'short' }}
 ```
 
 ## Performance Standards
