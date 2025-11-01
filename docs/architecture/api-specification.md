@@ -338,6 +338,119 @@ interface TrackVoiceUsageResponse {
 - Verifies webhook signature using Stripe webhook secret
 - Rejects requests without valid signature
 
+## Data Management Functions
+
+### Function: `exportTenantData`
+
+**Purpose:** Export all tenant data for GDPR compliance and data portability (FR23)
+
+**Request:**
+```typescript
+interface ExportTenantDataRequest {
+  tenantId: string;
+  requesterId: string;        // UID of requesting user (must be owner/representative)
+  format: 'json' | 'csv' | 'pdf';
+  options?: {
+    includeDeleted?: boolean;  // Include soft-deleted records (default: false)
+    dateRange?: {
+      from: Timestamp;
+      to: Timestamp;
+    };
+    collections?: Array<     // Specific collections to export (default: all)
+      'members' | 'jobs' | 'costs' | 'resources' | 'journeys' |
+      'advances' | 'auditLogs' | 'businessProfile'
+    >;
+    anonymize?: boolean;      // Anonymize personal data (default: false)
+  };
+}
+```
+
+**Response:**
+```typescript
+interface ExportTenantDataResponse {
+  exportId: string;           // Unique export identifier
+  status: 'pending' | 'processing' | 'completed' | 'failed';
+  message?: string;
+  downloadUrl?: string;       // Signed URL valid for 24 hours (when completed)
+  expiresAt?: Timestamp;      // When download URL expires
+  fileSize?: number;          // Size in bytes
+  recordCount?: {             // Number of records per collection
+    [collection: string]: number;
+  };
+  completedAt?: Timestamp;
+  error?: string;             // If status is 'failed'
+}
+```
+
+**Example Call:**
+```typescript
+const exportData = httpsCallable<ExportTenantDataRequest, ExportTenantDataResponse>(
+  functions,
+  'exportTenantData'
+);
+
+// Export all tenant data in JSON format
+const result = await exportData({
+  tenantId: 'tenant123',
+  requesterId: currentUser.uid,
+  format: 'json',
+  options: {
+    includeDeleted: true,
+    collections: ['jobs', 'costs', 'resources']
+  }
+});
+
+if (result.data.status === 'completed') {
+  // Download immediately available for small exports
+  window.open(result.data.downloadUrl);
+} else {
+  // Large exports run async, email sent when complete
+  showNotification('Export started. You will receive an email when complete.');
+}
+```
+
+**Processing:**
+- Small exports (<10MB): Processed synchronously, immediate download
+- Large exports: Processed asynchronously, email notification with download link
+- Files stored in Cloud Storage with 24-hour expiration
+- Audit log entry created for each export request
+
+**Security:**
+- Only tenant owners and representatives can export data
+- Export requests are rate-limited (max 5 per day per tenant)
+- All exports are logged in audit trail
+- Download URLs are signed and expire after 24 hours
+
+### Function: `deleteTenantData`
+
+**Purpose:** Permanently delete all tenant data for GDPR right to erasure (FR23)
+
+**Request:**
+```typescript
+interface DeleteTenantDataRequest {
+  tenantId: string;
+  requesterId: string;        // Must be tenant owner
+  confirmation: string;       // Must match tenant name for safety
+  reason?: string;           // Optional reason for audit
+}
+```
+
+**Response:**
+```typescript
+interface DeleteTenantDataResponse {
+  status: 'scheduled' | 'failed';
+  message: string;
+  scheduledAt?: Timestamp;   // When deletion will occur (30-day grace period)
+  error?: string;
+}
+```
+
+**Processing:**
+- Marks tenant for deletion with 30-day grace period
+- Sends confirmation email to all tenant owners
+- Creates immutable audit log entry
+- After grace period, background job permanently deletes all data
+
 ## Firestore Triggers (Automatic Backend Processing)
 
 These Cloud Functions run automatically in response to Firestore changes:

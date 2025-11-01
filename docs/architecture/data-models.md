@@ -77,6 +77,49 @@ interface Member {
 - Belongs to one Tenant
 - UID referenced in audit metadata across all entities
 - One-to-many with created/updated Jobs and Costs
+- One-to-one with UserPreferences
+
+## UserPreferences Model
+
+**Purpose:** Store user-specific preferences including active job context for voice interactions
+
+**Key Attributes:**
+- `uid`: string - Firebase Auth UID (document ID, matches Member.uid)
+- `tenantId`: string - Tenant scope
+- `activeJobId`: string | null - Currently active job for voice context
+- `lastActiveJobIds`: string[] - Recent jobs for quick switching (max 5)
+- `locale`: string - User's preferred language (cs-CZ or en-US)
+- `voiceEnabled`: boolean - Voice features enabled/disabled
+- `defaultCurrency`: string | null - Override tenant default if needed
+- `defaultVatRate`: number | null - Override tenant default if needed
+
+**TypeScript Interface:**
+```typescript
+interface UserPreferences {
+  uid: string;                    // Firebase Auth UID - document ID
+  tenantId: string;               // Tenant scope
+  activeJobId: string | null;     // Currently active job for voice context (FR1)
+  lastActiveJobIds: string[];     // Recent jobs for quick switching (max 5)
+  locale: string;                  // User language preference (cs-CZ or en-US)
+  voiceEnabled: boolean;           // Voice features on/off
+  defaultCurrency: string | null; // User's preferred currency
+  defaultVatRate: number | null;  // User's preferred VAT rate
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+```
+
+**Firestore Location:** `/users/{uid}/preferences/default`
+
+**Relationships:**
+- One-to-one with Member (same UID)
+- References Job entity via activeJobId
+- Created automatically on first user login
+
+**Voice Context Usage:**
+- When user says "add cost to active job", system uses `activeJobId`
+- Updates on "Set Active Job" voice command (FR1)
+- Cleared when job is completed or archived
 
 ## Job Model
 
